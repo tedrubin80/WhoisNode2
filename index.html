@@ -988,8 +988,9 @@
                 // Privacy Analysis
                 isPrivacyProtected: data.privacyAnalysis?.isPrivate || false,
                 privacyService: data.privacyAnalysis?.privacyService || null,
-                privacyDomain: data.privacyAnalysis?.privacyDomain || null,
-                privacyDomainWhois: data.privacyAnalysis?.privacyDomainWhois || null,
+                privacyDomains: data.privacyAnalysis?.privacyDomains || [],
+                privacyEmails: data.privacyAnalysis?.privacyEmails || [],
+                recursiveAnalysis: data.privacyAnalysis?.recursiveAnalysis || {},
                 
                 // Contact & Infrastructure
                 emails: data.whoisData?.emails || [],
@@ -1075,8 +1076,11 @@
                 workflowAlert = `
                     <div class="alert ${alertClass} workflow-alert mb-3">
                         <i class="bi bi-lightbulb"></i> <strong>Workflow Recommendation:</strong><br>
-                        ${analysis.quickAssessment.recommendation}
-                        ${analysis.privacyDomain ? `<br><small class="text-muted">Privacy domain to check: <code>${analysis.privacyDomain}</code></small>` : ''}
+                        ${analysis.quickAssessment?.recommendation} 
+                        ${analysis.recursiveAnalysis && Object.keys(analysis.recursiveAnalysis).length > 0 ? 
+                            `<br><small class="text-muted">Found ${Object.keys(analysis.recursiveAnalysis).length} privacy domain(s) - see recursive analysis below</small>` : 
+                            analysis.privacyDomains?.length > 0 ? `<br><small class="text-muted">Privacy domains to investigate: ${analysis.privacyDomains.join(', ')}</small>` : ''
+                        }
                     </div>
                 `;
             }
@@ -1146,7 +1150,8 @@
                                 ${analysis.isPrivacyProtected ? 
                                     `<div class="alert alert-info py-2 mb-2">
                                         <small><strong>Privacy Service:</strong> ${analysis.privacyService || 'Unknown'}</small>
-                                        ${analysis.privacyDomain ? `<br><small><strong>Privacy Domain:</strong> <code>${analysis.privacyDomain}</code></small>` : ''}
+                                        ${analysis.privacyEmails?.length > 0 ? `<br><small><strong>Privacy Emails:</strong> ${analysis.privacyEmails.slice(0, 3).map(e => `<code>${e}</code>`).join(', ')}${analysis.privacyEmails.length > 3 ? '...' : ''}</small>` : ''}
+                                        ${analysis.privacyDomains?.length > 0 ? `<br><small><strong>Privacy Domains:</strong> ${analysis.privacyDomains.slice(0, 3).map(d => `<code>${d}</code>`).join(', ')}${analysis.privacyDomains.length > 3 ? '...' : ''}</small>` : ''}
                                     </div>` : ''
                                 }
                                 ${analysis.emails.length > 0 ? 
@@ -1174,12 +1179,81 @@
                             </div>
                         </div>
                         
-                        <!-- Privacy Domain Analysis -->
+                        <!-- Enhanced Recursive Privacy Analysis -->
+                        ${Object.keys(analysis.recursiveAnalysis || {}).length > 0 ? `
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="alert alert-warning">
+                                        <h6><i class="bi bi-search"></i> Recursive Privacy Analysis Results</h6>
+                                        ${Object.entries(analysis.recursiveAnalysis).map(([domain, data]) => {
+                                            if (data.error) {
+                                                return `<div class="mb-2"><strong>${domain}:</strong> <span class="text-danger">Analysis failed - ${data.error}</span></div>`;
+                                            }
+                                            
+                                            let insights = [];
+                                            
+                                            // Company Intelligence
+                                            if (data.companyIntelligence?.actualCompany) {
+                                                insights.push(`<span class="badge bg-success">Actual Company: ${data.companyIntelligence.actualCompany}</span>`);
+                                            }
+                                            
+                                            // US Infrastructure Detection
+                                            if (data.geoIntelligence?.usPresence) {
+                                                insights.push(`<span class="badge bg-info">US Infrastructure</span>`);
+                                            }
+                                            
+                                            // Enhanced Registrar Info
+                                            if (data.registrarIntelligence?.isUSBased) {
+                                                insights.push(`<span class="badge bg-primary">US Registrar: ${data.registrarIntelligence.name}</span>`);
+                                            }
+                                            
+                                            // MX Records Analysis
+                                            if (data.mxRecords?.providers?.length > 0) {
+                                                const usProviders = data.mxRecords.providers.filter(p => p.includes('US') || p.includes('Google') || p.includes('Microsoft') || p.includes('Amazon'));
+                                                if (usProviders.length > 0) {
+                                                    insights.push(`<span class="badge bg-warning text-dark">US Email: ${usProviders[0]}</span>`);
+                                                }
+                                            }
+                                            
+                                            // Reverse IP Analysis
+                                            if (data.reverseAnalysis?.networkInfo?.provider) {
+                                                insights.push(`<span class="badge bg-secondary">Hosting: ${data.reverseAnalysis.networkInfo.provider}</span>`);
+                                            }
+                                            
+                                            return `
+                                                <div class="mb-3 p-2 border rounded">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <strong><i class="bi bi-shield-exclamation"></i> ${domain}</strong>
+                                                        <small class="text-muted">Confidence: ${data.companyIntelligence?.confidence || 'medium'}</small>
+                                                    </div>
+                                                    <div class="mb-2">${insights.join(' ')}</div>
+                                                    ${data.companyIntelligence?.usConnections?.length > 0 ? 
+                                                        `<div class="small">
+                                                            <strong>US Connections:</strong>
+                                                            <ul class="mb-0 mt-1">
+                                                                ${data.companyIntelligence.usConnections.slice(0, 3).map(conn => `<li>${conn}</li>`).join('')}
+                                                            </ul>
+                                                        </div>` : ''
+                                                    }
+                                                    ${data.companyIntelligence?.reasoning?.length > 0 ? 
+                                                        `<div class="small mt-2">
+                                                            <strong>Analysis:</strong> ${data.companyIntelligence.reasoning[0]}
+                                                        </div>` : ''
+                                                    }
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Legacy Privacy Domain Analysis (for backward compatibility) -->
                         ${analysis.privacyDomainWhois ? `
                             <div class="row mt-3">
                                 <div class="col-12">
                                     <div class="alert alert-secondary">
-                                        <h6><i class="bi bi-shield-exclamation"></i> Privacy Domain Analysis: <code>${analysis.privacyDomain}</code></h6>
+                                        <h6><i class="bi bi-shield-exclamation"></i> Legacy Privacy Domain Analysis</h6>
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <strong>Privacy Registrar:</strong> ${analysis.privacyDomainWhois.registrar || 'Unknown'}<br>
@@ -1266,16 +1340,69 @@
                 report += `  Status: ${analysis.status}\n`;
                 report += `  Country: ${analysis.country}\n\n`;
                 
-                // Privacy Analysis
                 report += `PRIVACY ANALYSIS:\n`;
                 report += `  Protected: ${analysis.isPrivacyProtected ? 'YES' : 'NO'}\n`;
                 if (analysis.isPrivacyProtected) {
                     report += `  Service: ${analysis.privacyService || 'Unknown'}\n`;
-                    if (analysis.privacyDomain) {
-                        report += `  Privacy Domain: ${analysis.privacyDomain}\n`;
+                    if (analysis.privacyEmails?.length > 0) {
+                        report += `  Privacy Emails: ${analysis.privacyEmails.join(', ')}\n`;
+                    }
+                    if (analysis.privacyDomains?.length > 0) {
+                        report += `  Privacy Domains: ${analysis.privacyDomains.join(', ')}\n`;
                     }
                 }
                 report += `\n`;
+                
+                // Enhanced Recursive Privacy Analysis
+                if (analysis.recursiveAnalysis && Object.keys(analysis.recursiveAnalysis).length > 0) {
+                    report += `RECURSIVE PRIVACY ANALYSIS:\n`;
+                    for (const [domain, data] of Object.entries(analysis.recursiveAnalysis)) {
+                        report += `\n  Privacy Domain: ${domain}\n`;
+                        if (data.error) {
+                            report += `    Status: ERROR - ${data.error}\n`;
+                            continue;
+                        }
+                        
+                        if (data.companyIntelligence?.actualCompany) {
+                            report += `    Actual Company: ${data.companyIntelligence.actualCompany}\n`;
+                            report += `    Confidence: ${data.companyIntelligence.confidence}\n`;
+                        }
+                        
+                        if (data.registrarIntelligence) {
+                            report += `    Privacy Registrar: ${data.registrarIntelligence.name}\n`;
+                            report += `    US-Based: ${data.registrarIntelligence.isUSBased ? 'YES' : 'NO'}\n`;
+                            if (data.registrarIntelligence.headquarters) {
+                                report += `    Headquarters: ${data.registrarIntelligence.headquarters}\n`;
+                            }
+                        }
+                        
+                        if (data.mxRecords?.providers?.length > 0) {
+                            report += `    Email Infrastructure: ${data.mxRecords.providers.join(', ')}\n`;
+                        }
+                        
+                        if (data.geoIntelligence) {
+                            report += `    US Infrastructure: ${data.geoIntelligence.usPresence ? 'YES' : 'NO'}\n`;
+                            if (data.geoIntelligence.primaryCountry) {
+                                report += `    Primary Country: ${data.geoIntelligence.primaryCountry}\n`;
+                            }
+                        }
+                        
+                        if (data.companyIntelligence?.usConnections?.length > 0) {
+                            report += `    US Connections:\n`;
+                            data.companyIntelligence.usConnections.forEach(conn => {
+                                report += `      - ${conn}\n`;
+                            });
+                        }
+                        
+                        if (data.companyIntelligence?.reasoning?.length > 0) {
+                            report += `    Analysis Notes:\n`;
+                            data.companyIntelligence.reasoning.forEach(reason => {
+                                report += `      - ${reason}\n`;
+                            });
+                        }
+                    }
+                    report += `\n`;
+                }
                 
                 // Contact Information
                 if (analysis.emails.length > 0) {
@@ -1351,19 +1478,41 @@
         }
 
         function exportSpreadsheet() {
-            let csv = 'Domain,Registrar,Category,US Registrar,Privacy Protected,Privacy Service,Created,Expires,Status,Country,Primary IP,Location,Name Servers,Emails,Processing Time,Priority,Recommendation\n';
+            let csv = 'Domain,Registrar,Category,US Registrar,Privacy Protected,Privacy Service,Privacy Domains,Actual Company,US Infrastructure,Created,Expires,Status,Country,Primary IP,Location,Name Servers,Emails,Processing Time,Priority,Recommendation\n';
             
             analysisData.forEach(analysis => {
                 if (analysis.error) {
-                    csv += `"${analysis.domain}","ERROR","","","","","","","","","","","","","","","${analysis.error}"\n`;
+                    csv += `"${analysis.domain}","ERROR","","","","","","","","","","","","","","","","","","${analysis.error}"\n`;
                     return;
                 }
                 
                 const emails = analysis.emails.join('; ');
                 const nameServers = analysis.nameServers.join('; ');
+                const privacyDomains = analysis.privacyDomains?.join('; ') || '';
                 const location = analysis.geoLocation ? `${analysis.geoLocation.city}, ${analysis.geoLocation.country}` : '';
                 
-                csv += `"${analysis.domain}","${analysis.registrar}","${analysis.registrarCategory}","${analysis.isUSRegistrar}","${analysis.isPrivacyProtected}","${analysis.privacyService || ''}","${analysis.creationDate}","${analysis.expirationDate}","${analysis.status}","${analysis.country}","${analysis.primaryIP || ''}","${location}","${nameServers}","${emails}","${analysis.processingTime}","${analysis.quickAssessment?.priority || 'normal'}","${analysis.quickAssessment?.recommendation || ''}"\n`;
+                // Extract actual company and US infrastructure from recursive analysis
+                let actualCompany = '';
+                let usInfrastructure = 'No';
+                
+                if (analysis.recursiveAnalysis) {
+                    const companies = [];
+                    let hasUSInfra = false;
+                    
+                    for (const [domain, data] of Object.entries(analysis.recursiveAnalysis)) {
+                        if (data.companyIntelligence?.actualCompany) {
+                            companies.push(`${domain}: ${data.companyIntelligence.actualCompany}`);
+                        }
+                        if (data.geoIntelligence?.usPresence) {
+                            hasUSInfra = true;
+                        }
+                    }
+                    
+                    actualCompany = companies.join(' | ');
+                    usInfrastructure = hasUSInfra ? 'Yes' : 'No';
+                }
+                
+                csv += `"${analysis.domain}","${analysis.registrar}","${analysis.registrarCategory}","${analysis.isUSRegistrar}","${analysis.isPrivacyProtected}","${analysis.privacyService || ''}","${privacyDomains}","${actualCompany}","${usInfrastructure}","${analysis.creationDate}","${analysis.expirationDate}","${analysis.status}","${analysis.country}","${analysis.primaryIP || ''}","${location}","${nameServers}","${emails}","${analysis.processingTime}","${analysis.quickAssessment?.priority || 'normal'}","${analysis.quickAssessment?.recommendation || ''}"\n`;
             });
             
             downloadFile(csv, `domain_analysis_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
