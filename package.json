@@ -1,5 +1,5 @@
 
-*/{
+{
   "name": "whois-intelligence-server-enhanced",
   "version": "2.0.0",
   "description": "Enhanced WHOIS Intelligence Backend Server with RDAP, Threat Intelligence, and Advanced Analytics",
