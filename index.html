@@ -190,7 +190,427 @@
                         </button>
                     </nav>
                 </div>
+<!-- Privacy Investigation Tab -->
+<button class="tab-btn py-4 px-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="privacy">
+    <span class="flex items-center space-x-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+        </svg>
+        <span>Privacy Investigation</span>
+    </span>
+</button>
 
+<!-- Privacy Investigation Tab Content -->
+<div id="tab-privacy" class="tab-content hidden">
+    <div id="privacyInfo">
+        <!-- Dynamic content will be inserted here -->
+    </div>
+</div>
+
+<script>
+// Add these variables to your existing dashboard script
+let currentPrivacyInvestigation = null;
+
+// Enhanced analyze domain function - update your existing function
+async function analyzeDomain() {
+    const domain = document.getElementById('domainInput').value.trim();
+    
+    if (!domain) {
+        alert('Please enter a domain name');
+        return;
+    }
+    
+    console.log('🔍 Starting analysis for:', domain);
+    setLoadingState(true);
+    hideResults();
+    
+    try {
+        // Reset previous results
+        currentAnalysis = null;
+        currentThreat = null;
+        currentRisk = null;
+        currentPrivacyInvestigation = null;
+        
+        // 1. Basic domain analysis
+        console.log('📊 Fetching domain analysis...');
+        const analysisResponse = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain })
+        });
+        
+        if (!analysisResponse.ok) {
+            throw new Error(`Analysis failed: ${analysisResponse.status}`);
+        }
+        
+        const analysisData = await analysisResponse.json();
+        console.log('✅ Analysis data:', analysisData);
+        currentAnalysis = analysisData;
+        
+        // Check if domain has privacy protection
+        const hasPrivacyProtection = analysisData?.summary?.isPrivacyProtected || 
+                                   analysisData?.privacyAnalysis?.isPrivate;
+        
+        // 2. If privacy protection detected, run privacy investigation
+        if (hasPrivacyProtection) {
+            console.log('🔒 Privacy protection detected - starting investigation...');
+            try {
+                const privacyResponse = await fetch('/api/privacy-investigation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain })
+                });
+                
+                if (privacyResponse.ok) {
+                    const privacyData = await privacyResponse.json();
+                    console.log('🕵️ Privacy investigation:', privacyData);
+                    currentPrivacyInvestigation = privacyData;
+                }
+            } catch (e) {
+                console.log('⚠️ Privacy investigation failed:', e.message);
+            }
+        }
+        
+        // 3. Continue with other analyses (threat, risk)
+        try {
+            console.log('🛡️ Fetching threat analysis...');
+            const threatResponse = await fetch('/api/threat-analysis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain })
+            });
+            
+            if (threatResponse.ok) {
+                const threatData = await threatResponse.json();
+                console.log('✅ Threat data:', threatData);
+                currentThreat = threatData;
+            }
+        } catch (e) {
+            console.log('⚠️ Threat analysis not available:', e.message);
+        }
+        
+        try {
+            console.log('📈 Fetching risk score...');
+            const riskResponse = await fetch('/api/risk-score', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain })
+            });
+            
+            if (riskResponse.ok) {
+                const riskData = await riskResponse.json();
+                console.log('✅ Risk data:', riskData);
+                currentRisk = riskData;
+            }
+        } catch (e) {
+            console.log('⚠️ Risk scoring not available:', e.message);
+        }
+        
+        // Display all results
+        displayResults();
+        
+    } catch (error) {
+        console.error('❌ Analysis failed:', error);
+        alert('Analysis failed: ' + error.message);
+    } finally {
+        setLoadingState(false);
+    }
+}
+
+// Update your existing updateTabs function
+function updateTabs() {
+    updateOverviewTab();
+    updateThreatsTab();
+    updateRiskTab();
+    updateDNSTab();
+    updatePrivacyTab(); // Add this line
+}
+
+// Add this new function for privacy investigation tab
+function updatePrivacyTab() {
+    const privacyInfo = document.getElementById('privacyInfo');
+    
+    if (currentPrivacyInvestigation && currentPrivacyInvestigation.privacyAnalysis?.needsInvestigation) {
+        const privacy = currentPrivacyInvestigation.privacyAnalysis;
+        const report = currentPrivacyInvestigation.investigationReport;
+        
+        privacyInfo.innerHTML = `
+            <div class="space-y-8">
+                <!-- Investigation Summary -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500 rounded-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                        <svg class="w-6 h-6 mr-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                        Privacy Protection Investigation Results
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-blue-600">${privacy.privacyDomains.length}</div>
+                            <div class="text-sm text-gray-600">Privacy Domains Found</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-green-600">${Object.keys(privacy.recursiveAnalysis).length}</div>
+                            <div class="text-sm text-gray-600">Domains Investigated</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold ${getJurisdictionColor(report?.summary?.usJurisdictionLikelihood)}">${formatJurisdiction(report?.summary?.usJurisdictionLikelihood)}</div>
+                            <div class="text-sm text-gray-600">US Jurisdiction Likelihood</div>
+                        </div>
+                    </div>
+                    
+                    ${privacy.privacyService ? `
+                        <div class="bg-white rounded-lg p-4 mb-4">
+                            <span class="text-sm font-medium text-gray-600">Privacy Service Detected:</span>
+                            <span class="text-sm font-bold text-orange-600 ml-2">${privacy.privacyService}</span>
+                        </div>
+                    ` : ''}
+                </div>
+
+                <!-- Privacy Domains Analysis -->
+                <div>
+                    <h4 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                        Privacy Domain Investigations
+                    </h4>
+                    
+                    <div class="space-y-4">
+                        ${Object.entries(privacy.recursiveAnalysis).map(([domain, analysis]) => {
+                            if (analysis.error) {
+                                return `
+                                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                        <div class="flex items-center mb-2">
+                                            <svg class="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            </svg>
+                                            <span class="font-semibold text-red-800">${domain}</span>
+                                            <span class="ml-2 text-xs bg-red-200 text-red-700 px-2 py-1 rounded">FAILED</span>
+                                        </div>
+                                        <p class="text-sm text-red-700">Error: ${analysis.error}</p>
+                                    </div>
+                                `;
+                            }
+                            
+                            return `
+                                <div class="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div class="flex items-center">
+                                            <svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            </svg>
+                                            <span class="font-semibold text-gray-900">${domain}</span>
+                                        </div>
+                                        <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">ANALYZED</span>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <!-- Company Intelligence -->
+                                        ${analysis.companyIntelligence?.actualCompany ? `
+                                            <div class="bg-blue-50 rounded-lg p-3">
+                                                <div class="text-sm font-medium text-blue-900 mb-1">🏢 Actual Company Detected</div>
+                                                <div class="text-sm text-blue-800">${analysis.companyIntelligence.actualCompany}</div>
+                                                <div class="text-xs text-blue-600 mt-1">Confidence: ${analysis.companyIntelligence.confidence}</div>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        <!-- US Connections -->
+                                        ${analysis.companyIntelligence?.usConnections?.length > 0 ? `
+                                            <div class="bg-red-50 rounded-lg p-3">
+                                                <div class="text-sm font-medium text-red-900 mb-2">🇺🇸 US Connections</div>
+                                                <div class="space-y-1">
+                                                    ${analysis.companyIntelligence.usConnections.slice(0, 3).map(connection => `
+                                                        <div class="text-xs text-red-800">• ${connection}</div>
+                                                    `).join('')}
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        <!-- Infrastructure Details -->
+                                        <div class="bg-gray-50 rounded-lg p-3">
+                                            <div class="text-sm font-medium text-gray-900 mb-2">🌐 Infrastructure</div>
+                                            <div class="space-y-1 text-xs text-gray-700">
+                                                ${analysis.registrarIntelligence?.name ? `<div>• Registrar: ${analysis.registrarIntelligence.name}</div>` : ''}
+                                                ${analysis.geoIntelligence?.primaryCountry ? `<div>• Primary Location: ${analysis.geoIntelligence.primaryCountry}</div>` : ''}
+                                                ${analysis.mxRecords?.usBasedProviders?.length > 0 ? `<div>• Email: ${analysis.mxRecords.usBasedProviders.join(', ')}</div>` : ''}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Investigation Summary -->
+                                        ${analysis.investigationSummary ? `
+                                            <div class="bg-yellow-50 rounded-lg p-3">
+                                                <div class="text-sm font-medium text-yellow-900 mb-2">📋 Assessment</div>
+                                                <div class="text-xs text-yellow-800">
+                                                    <div>• US Jurisdiction: ${formatJurisdiction(analysis.investigationSummary.usJurisdictionLikelihood)}</div>
+                                                    <div>• Evidence: ${analysis.investigationSummary.evidenceStrength}</div>
+                                                    <div>• Overall: ${formatAssessment(analysis.investigationSummary.overallAssessment)}</div>
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+
+                <!-- Privacy Bypass Methods -->
+                ${report?.privacyBypassOptions?.length > 0 ? `
+                    <div>
+                        <h4 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2m-2-2a2 2 0 00-2 2m2-2V5a2 2 0 00-2-2m-2 2V3a2 2 0 00-2-2m2 2a2 2 0 012 2m0 0v2a4 4 0 01-4 4m0 0a4 4 0 01-4-4m4 0V9a2 2 0 00-2-2m0 0a2 2 0 00-2-2"></path>
+                            </svg>
+                            Privacy Bypass Methods Available
+                        </h4>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${report.privacyBypassOptions.map(option => `
+                                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="font-medium text-gray-900">${option.method}</span>
+                                        <span class="text-xs px-2 py-1 rounded ${getEffectivenessColor(option.effectiveness)}">${option.effectiveness.toUpperCase()}</span>
+                                    </div>
+                                    <p class="text-sm text-gray-600 mb-2">${option.description}</p>
+                                    <div class="text-xs text-gray-500">
+                                        <span class="font-medium">Jurisdiction:</span> ${option.jurisdiction}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Legal Recommendations -->
+                ${report?.legalRecommendations?.length > 0 ? `
+                    <div class="bg-green-50 border-l-4 border-green-400 rounded-lg p-6">
+                        <h4 class="text-lg font-bold text-green-900 mb-4 flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Legal Recommendations
+                        </h4>
+                        
+                        <div class="space-y-3">
+                            ${report.legalRecommendations.map(rec => `
+                                <div class="flex items-start space-x-3">
+                                    <svg class="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <span class="text-sm text-green-800">${rec}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        ${report.nextSteps?.length > 0 ? `
+                            <div class="mt-4 pt-4 border-t border-green-200">
+                                <div class="text-sm font-medium text-green-900 mb-2">Next Steps:</div>
+                                <div class="space-y-1">
+                                    ${report.nextSteps.map(step => `
+                                        <div class="text-sm text-green-800">• ${step}</div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    } else if (currentAnalysis?.summary?.isPrivacyProtected) {
+        privacyInfo.innerHTML = `
+            <div class="text-center py-12">
+                <svg class="w-16 h-16 text-yellow-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Privacy Protection Detected</h3>
+                <p class="text-gray-600 mb-4">This domain uses privacy protection, but detailed investigation is not available.</p>
+                <button onclick="runPrivacyInvestigation()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                    Run Detailed Investigation
+                </button>
+            </div>
+        `;
+    } else {
+        privacyInfo.innerHTML = `
+            <div class="text-center py-12">
+                <svg class="w-16 h-16 text-green-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">No Privacy Protection</h3>
+                <p class="text-gray-600">This domain does not appear to use privacy protection services.</p>
+            </div>
+        `;
+    }
+}
+
+// Helper function to run privacy investigation manually
+async function runPrivacyInvestigation() {
+    const domain = document.getElementById('domainInput').value.trim();
+    
+    if (!domain) return;
+    
+    try {
+        const response = await fetch('/api/privacy-investigation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            currentPrivacyInvestigation = data;
+            updatePrivacyTab();
+        }
+    } catch (error) {
+        console.error('Privacy investigation failed:', error);
+    }
+}
+
+// Helper functions for formatting
+function getJurisdictionColor(likelihood) {
+    const colors = {
+        very_high: 'text-red-600',
+        high: 'text-orange-600',
+        medium: 'text-yellow-600',
+        low: 'text-green-600',
+        unknown: 'text-gray-600'
+    };
+    return colors[likelihood] || colors.unknown;
+}
+
+function formatJurisdiction(likelihood) {
+    const formats = {
+        very_high: 'Very High',
+        high: 'High',
+        medium: 'Medium',
+        low: 'Low',
+        unknown: 'Unknown'
+    };
+    return formats[likelihood] || 'Unknown';
+}
+
+function formatAssessment(assessment) {
+    const formats = {
+        us_jurisdiction_likely: 'US Jurisdiction Likely',
+        us_jurisdiction_possible: 'US Jurisdiction Possible',
+        mixed_jurisdiction: 'Mixed Jurisdiction',
+        non_us_jurisdiction: 'Non-US Jurisdiction',
+        unknown: 'Unknown'
+    };
+    return formats[assessment] || 'Unknown';
+}
+
+function getEffectivenessColor(effectiveness) {
+    const colors = {
+        high: 'bg-red-100 text-red-700',
+        medium: 'bg-yellow-100 text-yellow-700',
+        low: 'bg-green-100 text-green-700'
+    };
+    return colors[effectiveness] || 'bg-gray-100 text-gray-700';
+}
+</script>
                 <!-- Tab Content -->
                 <div class="p-8">
                     <!-- Overview Tab -->
