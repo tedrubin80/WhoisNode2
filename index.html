@@ -1,618 +1,516 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WHOIS Intelligence Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .loading { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .fade-in { animation: fadeIn 0.5s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-    <!-- Header -->
-    <div class="bg-white shadow-sm border-b">
-        <div class="max-w-7xl mx-auto px-4 py-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                        <span class="text-white font-bold">W</span>
-                    </div>
-                    <h1 class="text-2xl font-bold text-gray-900">WHOIS Intelligence</h1>
-                    <span class="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">v2.0 Enhanced</span>
-                </div>
-                <div id="serverStatus" class="flex items-center space-x-2 text-sm">
-                    <div class="w-2 h-2 bg-gray-400 rounded-full"></div>
-                    <span class="text-gray-600">Connecting...</span>
-                </div>
+/*
+FILE LOCATION: /frontend/src/App.js (for React app)
+FILE NAME: App.js
+PURPOSE: Modern WHOIS Intelligence React Dashboard
+DESCRIPTION: React component for domain analysis, threat intelligence, and risk scoring
+VERSION: 2.0.0
+DEPENDENCIES: react, lucide-react
+USAGE: Replace default App.js in React app or use as component
+*/
+
+import React, { useState, useEffect } from 'react';
+import { Search, Shield, AlertTriangle, Activity, Globe, Database, TrendingUp, Eye } from 'lucide-react';
+
+const WHOISIntelligenceDashboard = () => {
+  const [domain, setDomain] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [threatData, setThreatData] = useState(null);
+  const [riskScore, setRiskScore] = useState(null);
+  const [activeTab, setActiveTab] = useState('analysis');
+  const [apiStats, setApiStats] = useState(null);
+
+  // Fetch API status on load
+  useEffect(() => {
+    fetchApiStatus();
+  }, []);
+
+  const fetchApiStatus = async () => {
+    try {
+      const response = await fetch('/api/status');
+      const data = await response.json();
+      setApiStats(data);
+    } catch (error) {
+      console.error('Failed to fetch API status:', error);
+    }
+  };
+
+  const analyzeDomain = async () => {
+    if (!domain.trim()) return;
+    
+    setLoading(true);
+    setAnalysis(null);
+    setThreatData(null);
+    setRiskScore(null);
+
+    try {
+      // Basic domain analysis
+      const analysisResponse = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: domain.trim() })
+      });
+      const analysisData = await analysisResponse.json();
+      setAnalysis(analysisData);
+
+      // Threat analysis
+      const threatResponse = await fetch('/api/threat-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: domain.trim() })
+      });
+      const threatResult = await threatResponse.json();
+      setThreatData(threatResult);
+
+      // Risk score
+      const riskResponse = await fetch('/api/risk-score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: domain.trim() })
+      });
+      const riskResult = await riskResponse.json();
+      setRiskScore(riskResult);
+
+    } catch (error) {
+      console.error('Analysis failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRiskColor = (level) => {
+    const colors = {
+      low: 'text-green-600 bg-green-100',
+      medium: 'text-yellow-600 bg-yellow-100',
+      high: 'text-orange-600 bg-orange-100',
+      critical: 'text-red-600 bg-red-100'
+    };
+    return colors[level] || 'text-gray-600 bg-gray-100';
+  };
+
+  const getThreatSeverityColor = (severity) => {
+    const colors = {
+      low: 'text-green-600',
+      medium: 'text-yellow-600',
+      high: 'text-orange-600',
+      critical: 'text-red-600'
+    };
+    return colors[severity] || 'text-gray-600';
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Shield className="h-8 w-8 text-blue-600" />
+              <h1 className="text-2xl font-bold text-gray-900">WHOIS Intelligence</h1>
+              <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">v2.0 Enhanced</span>
             </div>
+            {apiStats && (
+              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                <span className="flex items-center">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                  {apiStats.status}
+                </span>
+                <span>{apiStats.tier} tier</span>
+              </div>
+            )}
+          </div>
         </div>
-    </div>
+      </div>
 
-    <div class="max-w-7xl mx-auto px-4 py-6">
-        <!-- Search Section -->
-        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-            <div class="flex items-center space-x-4">
-                <div class="flex-1">
-                    <label for="domainInput" class="block text-sm font-medium text-gray-700 mb-2">
-                        Domain Analysis
-                    </label>
-                    <div class="relative">
-                        <input
-                            type="text"
-                            id="domainInput"
-                            placeholder="Enter domain (e.g., example.com)"
-                            class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <div class="absolute left-3 top-3.5">
-                            <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0 9a9 9 0 01-9-9m9 9c0-1.485.5-3.5.5-3.5S12.5 21 12.5 21" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-                <button
-                    id="analyzeBtn"
-                    class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                >
-                    <svg id="searchIcon" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <span id="analyzeText">Analyze</span>
-                </button>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Search Section */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center space-x-4">
+            <div className="flex-1">
+              <label htmlFor="domain" className="block text-sm font-medium text-gray-700 mb-2">
+                Domain Analysis
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  id="domain"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && analyzeDomain()}
+                  placeholder="Enter domain (e.g., example.com)"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <Globe className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+              </div>
             </div>
-        </div>
-
-        <!-- Results Section -->
-        <div id="resultsSection" class="hidden space-y-6">
-            <!-- Overview Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <!-- Domain Status -->
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm text-gray-600">Domain Status</p>
-                            <p id="domainStatus" class="text-lg font-semibold text-gray-900">-</p>
-                        </div>
-                        <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                            <svg class="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Risk Score -->
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm text-gray-600">Risk Score</p>
-                            <p id="riskScore" class="text-lg font-semibold text-gray-900">-/100</p>
-                            <span id="riskLevel" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">-</span>
-                        </div>
-                        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Threat Level -->
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm text-gray-600">Threat Level</p>
-                            <p id="threatLevel" class="text-lg font-semibold text-gray-900">-</p>
-                        </div>
-                        <div class="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                            <svg class="h-5 w-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.664-.833-2.464 0L5.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Registrar -->
-                <div class="bg-white p-4 rounded-lg shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm text-gray-600">Registrar</p>
-                            <p id="registrar" class="text-lg font-semibold text-gray-900 truncate">-</p>
-                            <span id="registrarLocation" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">-</span>
-                        </div>
-                        <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                            <svg class="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Detailed Results -->
-            <div class="bg-white rounded-lg shadow-sm p-6">
-                <div class="border-b border-gray-200 mb-6">
-                    <nav class="flex space-x-8">
-                        <button class="tab-btn active py-4 px-1 border-b-2 border-blue-500 text-blue-600 font-medium" data-tab="analysis">
-                            Domain Analysis
-                        </button>
-                        <button class="tab-btn py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="threat">
-                            Threat Intelligence
-                        </button>
-                        <button class="tab-btn py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="risk">
-                            Risk Assessment
-                        </button>
-                        <button class="tab-btn py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="dns">
-                            DNS Records
-                        </button>
-                    </nav>
-                </div>
-
-                <!-- Tab Content -->
-                <div id="tab-analysis" class="tab-content">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900 mb-4">WHOIS Information</h3>
-                            <div id="whoisInfo" class="space-y-3">
-                                <!-- Dynamic content -->
-                            </div>
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Geographic Information</h3>
-                            <div id="geoInfo" class="space-y-3">
-                                <!-- Dynamic content -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="tab-threat" class="tab-content hidden">
-                    <div id="threatInfo">
-                        <!-- Dynamic content -->
-                    </div>
-                </div>
-
-                <div id="tab-risk" class="tab-content hidden">
-                    <div id="riskInfo">
-                        <!-- Dynamic content -->
-                    </div>
-                </div>
-
-                <div id="tab-dns" class="tab-content hidden">
-                    <div id="dnsInfo">
-                        <!-- Dynamic content -->
-                    </div>
-                </div>
-            </div>
+            <button
+              onClick={analyzeDomain}
+              disabled={loading || !domain.trim()}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            >
+              {loading ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              ) : (
+                <Search className="h-5 w-5" />
+              )}
+              <span>{loading ? 'Analyzing...' : 'Analyze'}</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Welcome Section -->
-        <div id="welcomeSection" class="bg-white rounded-lg shadow-sm p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Enhanced Features</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="text-center p-4">
-                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                        <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                        </svg>
-                    </div>
-                    <h3 class="font-medium text-gray-900">Threat Intelligence</h3>
-                    <p class="text-sm text-gray-600 mt-1">Advanced malware and phishing detection</p>
+        {/* Results Section */}
+        {(analysis || threatData || riskScore) && (
+          <div className="space-y-6">
+            {/* Quick Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Domain Status */}
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Domain Status</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {analysis?.success ? 'Active' : 'Error'}
+                    </p>
+                  </div>
+                  <Activity className={`h-8 w-8 ${analysis?.success ? 'text-green-500' : 'text-red-500'}`} />
                 </div>
-                <div class="text-center p-4">
-                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                    </div>
-                    <h3 class="font-medium text-gray-900">Risk Scoring</h3>
-                    <p class="text-sm text-gray-600 mt-1">Comprehensive domain risk assessment</p>
+              </div>
+
+              {/* Risk Score */}
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Risk Score</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {riskScore?.riskScore?.totalScore || 0}/100
+                    </p>
+                    {riskScore?.riskScore?.riskLevel && (
+                      <span className={`text-xs px-2 py-1 rounded-full ${getRiskColor(riskScore.riskScore.riskLevel)}`}>
+                        {riskScore.riskScore.riskLevel.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-blue-500" />
                 </div>
-                <div class="text-center p-4">
-                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                        <svg class="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                    </div>
-                    <h3 class="font-medium text-gray-900">Deep Analysis</h3>
-                    <p class="text-sm text-gray-600 mt-1">Comprehensive WHOIS and DNS investigation</p>
+              </div>
+
+              {/* Threat Level */}
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Threat Level</p>
+                    <p className={`text-lg font-semibold ${getThreatSeverityColor(threatData?.severity)}`}>
+                      {threatData?.severity?.toUpperCase() || 'UNKNOWN'}
+                    </p>
+                  </div>
+                  <AlertTriangle className={`h-8 w-8 ${getThreatSeverityColor(threatData?.severity)}`} />
                 </div>
-                <div class="text-center p-4">
-                    <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                        <svg class="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                    </div>
-                    <h3 class="font-medium text-gray-900">Real-time Analysis</h3>
-                    <p class="text-sm text-gray-600 mt-1">Fast, accurate domain intelligence</p>
+              </div>
+
+              {/* Registrar */}
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Registrar</p>
+                    <p className="text-lg font-semibold text-gray-900 truncate">
+                      {analysis?.summary?.registrar || 'Unknown'}
+                    </p>
+                    {analysis?.summary?.isUSRegistrar && (
+                      <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                        US-based
+                      </span>
+                    )}
+                  </div>
+                  <Database className="h-8 w-8 text-gray-500" />
                 </div>
+              </div>
             </div>
-        </div>
-    </div>
 
-    <script>
-        // Global variables
-        let currentAnalysis = null;
-        let currentThreat = null;
-        let currentRisk = null;
+            {/* Detailed Analysis Tabs */}
+            <div className="bg-white rounded-lg shadow-sm">
+              <div className="border-b border-gray-200">
+                <nav className="flex space-x-8 px-6">
+                  {[
+                    { id: 'analysis', label: 'Domain Analysis', icon: Globe },
+                    { id: 'threat', label: 'Threat Intelligence', icon: Shield },
+                    { id: 'risk', label: 'Risk Assessment', icon: AlertTriangle },
+                    { id: 'dns', label: 'DNS Records', icon: Database }
+                  ].map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                          activeTab === tab.id
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            checkServerStatus();
-            setupEventListeners();
-        });
+              <div className="p-6">
+                {/* Domain Analysis Tab */}
+                {activeTab === 'analysis' && analysis && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* WHOIS Information */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">WHOIS Information</h3>
+                        <div className="space-y-3">
+                          <div>
+                            <span className="text-sm text-gray-600">Creation Date:</span>
+                            <p className="text-sm font-medium">{analysis.summary?.creationDate || 'Unknown'}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Expiration Date:</span>
+                            <p className="text-sm font-medium">{analysis.summary?.expirationDate || 'Unknown'}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Registrant Country:</span>
+                            <p className="text-sm font-medium">{analysis.summary?.registrantCountry || 'Unknown'}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Privacy Protected:</span>
+                            <p className={`text-sm font-medium ${analysis.summary?.isPrivacyProtected ? 'text-orange-600' : 'text-green-600'}`}>
+                              {analysis.summary?.isPrivacyProtected ? 'Yes' : 'No'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-        function setupEventListeners() {
-            const domainInput = document.getElementById('domainInput');
-            const analyzeBtn = document.getElementById('analyzeBtn');
-            
-            // Enter key support
-            domainInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    analyzeDomain();
-                }
-            });
-            
-            // Analyze button
-            analyzeBtn.addEventListener('click', analyzeDomain);
-            
-            // Tab switching
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const tabName = this.getAttribute('data-tab');
-                    switchTab(tabName);
-                });
-            });
-        }
-
-        async function checkServerStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-                
-                const statusEl = document.getElementById('serverStatus');
-                statusEl.innerHTML = `
-                    <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span class="text-gray-600">${data.status}</span>
-                `;
-            } catch (error) {
-                const statusEl = document.getElementById('serverStatus');
-                statusEl.innerHTML = `
-                    <div class="w-2 h-2 bg-red-500 rounded-full"></div>
-                    <span class="text-gray-600">offline</span>
-                `;
-            }
-        }
-
-        async function analyzeDomain() {
-            const domain = document.getElementById('domainInput').value.trim();
-            
-            if (!domain) {
-                alert('Please enter a domain name');
-                return;
-            }
-            
-            setLoading(true);
-            hideResults();
-            
-            try {
-                // Basic analysis
-                const analysisResponse = await fetch('/api/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ domain })
-                });
-                const analysisData = await analysisResponse.json();
-                currentAnalysis = analysisData;
-                
-                // Threat analysis
-                try {
-                    const threatResponse = await fetch('/api/threat-analysis', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ domain })
-                    });
-                    const threatData = await threatResponse.json();
-                    currentThreat = threatData;
-                } catch (e) {
-                    console.log('Threat analysis failed:', e);
-                }
-                
-                // Risk scoring
-                try {
-                    const riskResponse = await fetch('/api/risk-score', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ domain })
-                    });
-                    const riskData = await riskResponse.json();
-                    currentRisk = riskData;
-                } catch (e) {
-                    console.log('Risk scoring failed:', e);
-                }
-                
-                displayResults();
-                
-            } catch (error) {
-                console.error('Analysis failed:', error);
-                alert('Analysis failed: ' + error.message);
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        function setLoading(loading) {
-            const btn = document.getElementById('analyzeBtn');
-            const icon = document.getElementById('searchIcon');
-            const text = document.getElementById('analyzeText');
-            
-            if (loading) {
-                btn.disabled = true;
-                icon.className = 'h-5 w-5 loading';
-                text.textContent = 'Analyzing...';
-            } else {
-                btn.disabled = false;
-                icon.className = 'h-5 w-5';
-                text.textContent = 'Analyze';
-            }
-        }
-
-        function hideResults() {
-            document.getElementById('resultsSection').classList.add('hidden');
-            document.getElementById('welcomeSection').classList.remove('hidden');
-        }
-
-        function displayResults() {
-            document.getElementById('welcomeSection').classList.add('hidden');
-            document.getElementById('resultsSection').classList.remove('hidden');
-            document.getElementById('resultsSection').classList.add('fade-in');
-            
-            updateOverviewCards();
-            updateAnalysisTab();
-            updateThreatTab();
-            updateRiskTab();
-            updateDNSTab();
-        }
-
-        function updateOverviewCards() {
-            // Domain Status
-            document.getElementById('domainStatus').textContent = 
-                currentAnalysis?.success ? 'Active' : 'Error';
-            
-            // Risk Score
-            const riskScore = currentRisk?.riskScore?.totalScore || 0;
-            const riskLevel = currentRisk?.riskScore?.riskLevel || 'unknown';
-            document.getElementById('riskScore').textContent = `${riskScore}/100`;
-            
-            const riskEl = document.getElementById('riskLevel');
-            riskEl.textContent = riskLevel.toUpperCase();
-            riskEl.className = `text-xs px-2 py-1 rounded-full ${getRiskColor(riskLevel)}`;
-            
-            // Threat Level
-            const threatLevel = currentThreat?.severity || 'unknown';
-            const threatEl = document.getElementById('threatLevel');
-            threatEl.textContent = threatLevel.toUpperCase();
-            threatEl.className = `text-lg font-semibold ${getThreatColor(threatLevel)}`;
-            
-            // Registrar
-            document.getElementById('registrar').textContent = 
-                currentAnalysis?.summary?.registrar || 'Unknown';
-            document.getElementById('registrarLocation').textContent = 
-                currentAnalysis?.summary?.isUSRegistrar ? 'US-based' : 'International';
-        }
-
-        function updateAnalysisTab() {
-            const whoisInfo = document.getElementById('whoisInfo');
-            const geoInfo = document.getElementById('geoInfo');
-            
-            if (currentAnalysis?.summary) {
-                const summary = currentAnalysis.summary;
-                
-                whoisInfo.innerHTML = `
-                    <div>
-                        <span class="text-sm text-gray-600">Creation Date:</span>
-                        <p class="text-sm font-medium">${summary.creationDate || 'Unknown'}</p>
+                      {/* Geographic Information */}
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Geographic Information</h3>
+                        <div className="space-y-3">
+                          <div>
+                            <span className="text-sm text-gray-600">Primary IP:</span>
+                            <p className="text-sm font-medium font-mono">{analysis.summary?.primaryIP || 'Unknown'}</p>
+                          </div>
+                          {analysis.summary?.geoLocation && (
+                            <>
+                              <div>
+                                <span className="text-sm text-gray-600">Country:</span>
+                                <p className="text-sm font-medium">{analysis.summary.geoLocation.country}</p>
+                              </div>
+                              <div>
+                                <span className="text-sm text-gray-600">Region:</span>
+                                <p className="text-sm font-medium">{analysis.summary.geoLocation.region}</p>
+                              </div>
+                              <div>
+                                <span className="text-sm text-gray-600">City:</span>
+                                <p className="text-sm font-medium">{analysis.summary.geoLocation.city}</p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Threat Intelligence Tab */}
+                {activeTab === 'threat' && threatData && (
+                  <div className="space-y-6">
                     <div>
-                        <span class="text-sm text-gray-600">Expiration Date:</span>
-                        <p class="text-sm font-medium">${summary.expirationDate || 'Unknown'}</p>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Threat Assessment</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        {Object.entries(threatData.threats || {}).map(([threat, detected]) => (
+                          <div key={threat} className="flex items-center space-x-2">
+                            <div className={`w-3 h-3 rounded-full ${detected ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                            <span className="text-sm capitalize">{threat}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
+                    {threatData.indicators && threatData.indicators.length > 0 && (
+                      <div>
+                        <h4 className="text-md font-semibold text-gray-900 mb-3">Threat Indicators</h4>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                          <ul className="space-y-2">
+                            {threatData.indicators.map((indicator, index) => (
+                              <li key={index} className="text-sm text-red-800 flex items-start space-x-2">
+                                <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                                <span>{indicator}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Risk Assessment Tab */}
+                {activeTab === 'risk' && riskScore && (
+                  <div className="space-y-6">
                     <div>
-                        <span class="text-sm text-gray-600">Privacy Protected:</span>
-                        <p class="text-sm font-medium ${summary.isPrivacyProtected ? 'text-orange-600' : 'text-green-600'}">
-                            ${summary.isPrivacyProtected ? 'Yes' : 'No'}
-                        </p>
-                    </div>
-                `;
-                
-                geoInfo.innerHTML = `
-                    <div>
-                        <span class="text-sm text-gray-600">Primary IP:</span>
-                        <p class="text-sm font-medium font-mono">${summary.primaryIP || 'Unknown'}</p>
-                    </div>
-                    ${summary.geoLocation ? `
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Assessment</h3>
+                      
+                      <div className="mb-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-900">Overall Risk Score</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {riskScore.riskScore?.totalScore || 0}/100
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full ${
+                              (riskScore.riskScore?.totalScore || 0) >= 70 ? 'bg-red-600' :
+                              (riskScore.riskScore?.totalScore || 0) >= 40 ? 'bg-yellow-600' : 'bg-green-600'
+                            }`}
+                            style={{ width: `${riskScore.riskScore?.totalScore || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {riskScore.riskScore?.factors && (
                         <div>
-                            <span class="text-sm text-gray-600">Country:</span>
-                            <p class="text-sm font-medium">${summary.geoLocation.country}</p>
-                        </div>
-                        <div>
-                            <span class="text-sm text-gray-600">Region:</span>
-                            <p class="text-sm font-medium">${summary.geoLocation.region}</p>
-                        </div>
-                        <div>
-                            <span class="text-sm text-gray-600">City:</span>
-                            <p class="text-sm font-medium">${summary.geoLocation.city}</p>
-                        </div>
-                    ` : '<p class="text-sm text-gray-500">No geographic information available</p>'}
-                `;
-            }
-        }
-
-        function updateThreatTab() {
-            const threatInfo = document.getElementById('threatInfo');
-            
-            if (currentThreat) {
-                const threats = currentThreat.threats || {};
-                const indicators = currentThreat.indicators || [];
-                
-                threatInfo.innerHTML = `
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Threat Assessment</h3>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        ${Object.entries(threats).map(([threat, detected]) => `
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3 h-3 rounded-full ${detected ? 'bg-red-500' : 'bg-green-500'}"></div>
-                                <span class="text-sm capitalize">${threat}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    ${indicators.length > 0 ? `
-                        <h4 class="text-md font-semibold text-gray-900 mb-3">Threat Indicators</h4>
-                        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                            <ul class="space-y-2">
-                                ${indicators.map(indicator => `
-                                    <li class="text-sm text-red-800 flex items-start space-x-2">
-                                        <svg class="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.664-.833-2.464 0L5.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                                        </svg>
-                                        <span>${indicator}</span>
-                                    </li>
-                                `).join('')}
-                            </ul>
-                        </div>
-                    ` : '<p class="text-sm text-green-600">No threat indicators detected</p>'}
-                `;
-            } else {
-                threatInfo.innerHTML = '<p class="text-sm text-gray-500">Threat analysis not available</p>';
-            }
-        }
-
-        function updateRiskTab() {
-            const riskInfo = document.getElementById('riskInfo');
-            
-            if (currentRisk?.riskScore) {
-                const riskScore = currentRisk.riskScore;
-                
-                riskInfo.innerHTML = `
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Risk Assessment</h3>
-                    
-                    <div class="mb-6">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm font-medium text-gray-900">Overall Risk Score</span>
-                            <span class="text-sm font-medium text-gray-900">${riskScore.totalScore}/100</span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="h-2 rounded-full ${getRiskBarColor(riskScore.totalScore)}" 
-                                 style="width: ${riskScore.totalScore}%"></div>
-                        </div>
-                    </div>
-
-                    ${riskScore.factors && riskScore.factors.length > 0 ? `
-                        <h4 class="text-md font-semibold text-gray-900 mb-3">Risk Factors</h4>
-                        <div class="space-y-3 mb-6">
-                            ${riskScore.factors.map(factor => `
-                                <div class="bg-gray-50 rounded-lg p-3">
-                                    <div class="flex items-center justify-between mb-1">
-                                        <span class="text-sm font-medium text-gray-900">${factor.factor}</span>
-                                        <span class="text-sm text-red-600">+${factor.score}</span>
-                                    </div>
-                                    <p class="text-xs text-gray-600">${factor.description}</p>
+                          <h4 className="text-md font-semibold text-gray-900 mb-3">Risk Factors</h4>
+                          <div className="space-y-3">
+                            {riskScore.riskScore.factors.map((factor, index) => (
+                              <div key={index} className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium text-gray-900">{factor.factor}</span>
+                                  <span className="text-sm text-red-600">+{factor.score}</span>
                                 </div>
-                            `).join('')}
+                                <p className="text-xs text-gray-600">{factor.description}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                    ` : ''}
+                      )}
 
-                    ${riskScore.recommendation ? `
-                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <h4 class="text-sm font-semibold text-blue-900 mb-2">Recommendation</h4>
-                            <p class="text-sm text-blue-800">${riskScore.recommendation}</p>
+                      {riskScore.riskScore?.recommendation && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <h4 className="text-sm font-semibold text-blue-900 mb-2">Recommendation</h4>
+                          <p className="text-sm text-blue-800">{riskScore.riskScore.recommendation}</p>
                         </div>
-                    ` : ''}
-                `;
-            } else {
-                riskInfo.innerHTML = '<p class="text-sm text-gray-500">Risk assessment not available</p>';
-            }
-        }
-
-        function updateDNSTab() {
-            const dnsInfo = document.getElementById('dnsInfo');
-            
-            if (currentAnalysis?.dnsData) {
-                const dns = currentAnalysis.dnsData;
-                
-                dnsInfo.innerHTML = `
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">DNS Records</h3>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h4 class="text-md font-semibold text-gray-900 mb-3">A Records (IPv4)</h4>
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                ${dns.A && dns.A.length > 0 ? 
-                                    dns.A.map(ip => `<p class="text-sm font-mono text-gray-800">${ip}</p>`).join('') :
-                                    '<p class="text-sm text-gray-500">No A records found</p>'
-                                }
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 class="text-md font-semibold text-gray-900 mb-3">MX Records (Email)</h4>
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                ${dns.MX && dns.MX.length > 0 ? 
-                                    dns.MX.map(mx => `<p class="text-sm font-mono text-gray-800">${mx.priority} ${mx.exchange}</p>`).join('') :
-                                    '<p class="text-sm text-gray-500">No MX records found</p>'
-                                }
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 class="text-md font-semibold text-gray-900 mb-3">NS Records (Name Servers)</h4>
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                ${dns.NS && dns.NS.length > 0 ? 
-                                    dns.NS.map(ns => `<p class="text-sm font-mono text-gray-800">${ns}</p>`).join('') :
-                                    '<p class="text-sm text-gray-500">No NS records found</p>'
-                                }
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 class="text-md font-semibold text-gray-900 mb-3">TXT Records</h4>
-                            <div class="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto">
-                                ${dns.TXT && dns.TXT.length > 0 ? 
-                                    dns.TXT.map(txt => `<p class="text-xs font-mono text-gray-800 break-all">${Array.isArray(txt) ? txt.join('') : txt}</p>`).join('') :
-                                    '<p class="text-sm text-gray-500">No TXT records found</p>'
-                                }
-                            </div>
-                        </div>
+                      )}
                     </div>
-                `;
-            } else {
-                dnsInfo.innerHTML = '<p class="text-sm text-gray-500">DNS information not available</p>';
-            }
-        }
+                  </div>
+                )}
 
-        function switchTab(tabName) {
-            // Update buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
-                btn.classList.add('border-transparent', 'text-gray-500');
-            });
-            
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active', 'border-blue-500', 'text-blue-600');
-            document.querySelector(`[data-tab="${tabName}"]`).classList.remove('border-transparent', 'text-gray-500');
-            
-            // Update content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-            
-            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
-        }
+                {/* DNS Records Tab */}
+                {activeTab === 'dns' && analysis?.dnsData && (
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">DNS Records</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* A Records */}
+                      <div>
+                        <h4 className="text-md font-semibold text-gray-900 mb-3">A Records (IPv4)</h4>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          {analysis.dnsData.A && analysis.dnsData.A.length > 0 ? (
+                            <div className="space-y-1">
+                              {analysis.dnsData.A.map((ip, index) => (
+                                <p key={index} className="text-sm font-mono text-gray-800">{ip}</p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">No A records found</p>
+                          )}
+                        </div>
+                      </div>
 
-        function getRiskColor(level) {
-            const colors = {
-                low: 'text-green-600 bg-green-100',
-                medium: 'text-yellow-600 
+                      {/* MX Records */}
+                      <div>
+                        <h4 className="text-md font-semibold text-gray-900 mb-3">MX Records (Email)</h4>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          {analysis.dnsData.MX && analysis.dnsData.MX.length > 0 ? (
+                            <div className="space-y-1">
+                              {analysis.dnsData.MX.map((mx, index) => (
+                                <p key={index} className="text-sm font-mono text-gray-800">
+                                  {mx.priority} {mx.exchange}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">No MX records found</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* NS Records */}
+                      <div>
+                        <h4 className="text-md font-semibold text-gray-900 mb-3">NS Records (Name Servers)</h4>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          {analysis.dnsData.NS && analysis.dnsData.NS.length > 0 ? (
+                            <div className="space-y-1">
+                              {analysis.dnsData.NS.map((ns, index) => (
+                                <p key={index} className="text-sm font-mono text-gray-800">{ns}</p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">No NS records found</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* TXT Records */}
+                      <div>
+                        <h4 className="text-md font-semibold text-gray-900 mb-3">TXT Records</h4>
+                        <div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto">
+                          {analysis.dnsData.TXT && analysis.dnsData.TXT.length > 0 ? (
+                            <div className="space-y-1">
+                              {analysis.dnsData.TXT.map((txt, index) => (
+                                <p key={index} className="text-xs font-mono text-gray-800 break-all">
+                                  {Array.isArray(txt) ? txt.join('') : txt}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">No TXT records found</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Help Section */}
+        {!analysis && !loading && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Enhanced Features</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="text-center p-4">
+                <Shield className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                <h3 className="font-medium text-gray-900">Threat Intelligence</h3>
+                <p className="text-sm text-gray-600 mt-1">Advanced malware and phishing detection</p>
+              </div>
+              <div className="text-center p-4">
+                <TrendingUp className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                <h3 className="font-medium text-gray-900">Risk Scoring</h3>
+                <p className="text-sm text-gray-600 mt-1">Comprehensive domain risk assessment</p>
+              </div>
+              <div className="text-center p-4">
+                <Eye className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                <h3 className="font-medium text-gray-900">RDAP Support</h3>
+                <p className="text-sm text-gray-600 mt-1">Modern domain registration data protocol</p>
+              </div>
+              <div className="text-center p-4">
+                <Activity className="h-8 w-8 text-orange-600 mx-auto mb-2" />
+                <h3 className="font-medium text-gray-900">Real-time Monitoring</h3>
+                <p className="text-sm text-gray-600 mt-1">Domain change detection and alerts</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default WHOISIntelligenceDashboard;
