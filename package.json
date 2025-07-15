@@ -1,9 +1,3 @@
-/*
-FILE LOCATION: /package.json
-FILE NAME: package.json
-PURPOSE: Enhanced Package.json with New Dependencies for WHOIS Intelligence Server
-DESCRIPTION: Dependencies for RDAP, Threat Intelligence, Database Integration, and Advanced Features
-VERSION: 2.0.0
 
 */{
   "name": "whois-intelligence-server-enhanced",
