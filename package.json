@@ -1,11 +1,11 @@
 {
   "name": "whois-intelligence-enhanced",
   "version": "2.0.0",
-  "description": "Enhanced WHOIS Intelligence Server",
-  "main": "server-enhanced.js",
+  "description": "Enhanced WHOIS Intelligence Server with Threat Analysis",
+  "main": "server.js",
   "scripts": {
-    "start": "node server-enhanced.js",
-    "dev": "nodemon server-enhanced.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -22,9 +22,15 @@
     "nodemon": "^3.0.2"
   },
   "engines": {
-    "node": "18.x",
-    "npm": "8.x"
+    "node": "18.x"
   },
+  "keywords": [
+    "whois",
+    "domain",
+    "intelligence",
+    "threat-analysis",
+    "cybersecurity"
+  ],
   "author": "Your Name",
   "license": "MIT"
 }
