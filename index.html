@@ -574,10 +574,26 @@
         async function checkServerStatus() {
             try {
                 console.log('📡 Checking server status...');
-                const data = await makeApiCall('/health');
+                // Don't use API key for health check
+                const response = await fetch(`${API_CONFIG.baseURL}/health`);
+                const data = await response.json();
                 
                 console.log('✅ Server status:', data);
                 updateServerStatus('online', data.status || 'operational');
+                
+                // Also check API status to show API key info
+                try {
+                    const apiStatus = await fetch(`${API_CONFIG.baseURL}/api/status`);
+                    const apiData = await apiStatus.json();
+                    console.log('📋 API Status:', apiData);
+                    
+                    // Show valid API keys in development
+                    if (apiData.authentication?.validKeys && Array.isArray(apiData.authentication.validKeys)) {
+                        console.log('🔑 Valid API keys:', apiData.authentication.validKeys);
+                    }
+                } catch (e) {
+                    console.log('⚠️ Could not fetch API status');
+                }
             } catch (error) {
                 console.error('❌ Server status check failed:', error);
                 updateServerStatus('offline', 'offline');
@@ -693,7 +709,37 @@
                 
             } catch (error) {
                 console.error('❌ Analysis failed:', error);
-                showError('Analysis failed', error.message);
+                
+                // Handle specific API key errors
+                if (error.message.includes('API key required') || error.message.includes('401')) {
+                    hideResults();
+                    document.getElementById('welcomeSection').innerHTML = `
+                        <div class="text-center py-12">
+                            <svg class="w-16 h-16 text-yellow-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">API Authentication Required</h3>
+                            <p class="text-gray-600 mb-4">Please enter a valid API key in the header to access the analysis features.</p>
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 max-w-md mx-auto">
+                                <h4 class="text-sm font-semibold text-blue-900 mb-2">Valid API Keys for Testing:</h4>
+                                <div class="space-y-1 text-sm text-blue-800 font-mono text-left">
+                                    <div>• demo-key-12345678 (default)</div>
+                                    <div>• demo-key</div>
+                                    <div>• test-key-123</div>
+                                    <div>• development-key</div>
+                                </div>
+                            </div>
+                            <button onclick="document.getElementById('apiKeyInput').focus(); document.getElementById('apiKeyInput').select();" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                                Update API Key
+                            </button>
+                        </div>
+                    `;
+                    document.getElementById('welcomeSection').classList.remove('hidden');
+                } else if (error.message.includes('Invalid API key')) {
+                    showError('Invalid API key. Please check your API key and try again.', 'Use one of the valid keys: demo-key-12345678, demo-key, test-key-123, or development-key');
+                } else {
+                    showError('Analysis failed', error.message);
+                }
             } finally {
                 setLoadingState(false);
             }
