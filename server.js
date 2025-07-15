@@ -1,362 +1,4 @@
-// ===== MX TOOLBOX STYLE ANALYSIS ENDPOINT =====
-app.post('/api/mx-analysis', async (req, res) => {
-  const startTime = Date.now();
-  
-  try {
-    const { domain } = req.body;
-    
-    if (!domain) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Domain parameter is required for MX analysis'
-      });
-    }
-    
-    const cleanDomain = cleanDomainName(domain);
-    console.log(`[MX ANALYSIS] Starting comprehensive analysis for: ${cleanDomain}`);
-    
-    const mxAnalysis = {
-      domain: cleanDomain,
-      timestamp: new Date().toISOString(),
-      success: true,
-      dnsRecords: null,
-      mxRecords: null,
-      spfRecord: null,
-      dmarcRecord: null,
-      reverseIpAnalysis: null,
-      emailInfrastructure: null,
-      geoDistribution: null,
-      securityAnalysis: null
-    };
-    
-    // 1. Comprehensive DNS Analysis
-    mxAnalysis.dnsRecords = await getDNSRecords(cleanDomain);
-    
-    // 2. Enhanced MX Analysis
-    mxAnalysis.mxRecords = await analyzeMXRecords(cleanDomain);
-    
-    // 3. SPF Record Analysis
-    mxAnalysis.spfRecord = await analyzeSPFRecord(cleanDomain);
-    
-    // 4. DMARC Record Analysis
-    mxAnalysis.dmarcRecord = await analyzeDMARCRecord(cleanDomain);
-    
-    // 5. Reverse IP Analysis for all A records
-    if (mxAnalysis.dnsRecords.A && mxAnalysis.dnsRecords.A.length > 0) {
-      mxAnalysis.reverseIpAnalysis = {};
-      for (const ip of mxAnalysis.dnsRecords.A.slice(0, 3)) {
-        mxAnalysis.reverseIpAnalysis[ip] = await performReverseIPAnalysis(ip);
-      }
-    }
-    
-    // 6. Email Infrastructure Summary
-    mxAnalysis.emailInfrastructure = generateEmailInfrastructureSummary(mxAnalysis);
-    
-    // 7. Geographic Distribution
-    mxAnalysis.geoDistribution = analyzeGeoDistribution(mxAnalysis);
-    
-    // 8. Security Analysis
-    mxAnalysis.securityAnalysis = analyzeEmailSecurity(mxAnalysis);
-    
-    mxAnalysis.processingTime = Date.now() - startTime;
-    
-    res.json(mxAnalysis);
-    
-  } catch (error) {
-    console.error('[MX ANALYSIS ERROR]', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'MX analysis failed',
-      message: error.message,
-      responseTime: Date.now() - startTime
-    });
-  }
-});
-
-// ===== SPF RECORD ANALYSIS =====
-async function analyzeSPFRecord(domain) {
-  try {
-    const txtRecords = await dns.resolveTxt(domain);
-    const spfRecord = txtRecords.find(record => 
-      record.join('').toLowerCase().startsWith('v=spf1')
-    );
-    
-    if (!spfRecord) {
-      return { exists: false, record: null, analysis: 'No SPF record found' };
-    }
-    
-    const spfString = spfRecord.join('');
-    const mechanisms = spfString.split(' ').filter(part => part.length > 0);
-    
-    const analysis = {
-      exists: true,
-      record: spfString,
-      mechanisms: mechanisms,
-      includes: mechanisms.filter(m => m.startsWith('include:')),
-      ipRanges: mechanisms.filter(m => m.startsWith('ip4:') || m.startsWith('ip6:')),
-      all: mechanisms.find(m => m.startsWith('~all') || m.startsWith('-all') || m.startsWith('+all')),
-      strength: 'unknown'
-    };
-    
-    // Determine SPF strength
-    if (analysis.all === '-all') {
-      analysis.strength = 'strict';
-    } else if (analysis.all === '~all') {
-      analysis.strength = 'soft';
-    } else if (analysis.all === '+all') {
-      analysis.strength = 'weak';
-    }
-    
-    return analysis;
-    
-  } catch (error) {
-    return { exists: false, error: error.message };
-  }
-}
-
-// ===== DMARC RECORD ANALYSIS =====
-async function analyzeDMARCRecord(domain) {
-  try {
-    const dmarcDomain = `_dmarc.${domain}`;
-    const txtRecords = await dns.resolveTxt(dmarcDomain);
-    const dmarcRecord = txtRecords.find(record => 
-      record.join('').toLowerCase().startsWith('v=dmarc1')
-    );
-    
-    if (!dmarcRecord) {
-      return { exists: false, record: null, analysis: 'No DMARC record found' };
-    }
-    
-    const dmarcString = dmarcRecord.join('');
-    const tags = {};
-    
-    // Parse DMARC tags
-    dmarcString.split(';').forEach(tag => {
-      const [key, value] = tag.trim().split('=');
-      if (key && value) {
-        tags[key.trim()] = value.trim();
-      }
-    });
-    
-    return {
-      exists: true,
-      record: dmarcString,
-      policy: tags.p || 'none',
-      subdomainPolicy: tags.sp,
-      percentage: tags.pct || '100',
-      reportingEmails: {
-        aggregate: tags.rua,
-        forensic: tags.ruf
-      },
-      alignment: {
-        spf: tags.aspf || 'r',
-        dkim: tags.adkim || 'r'
-      },
-      strength: tags.p === 'reject' ? 'strict' : tags.p === 'quarantine' ? 'moderate' : 'weak'
-    };
-    
-  } catch (error) {
-    return { exists: false, error: error.message };
-  }
-}
-
-// ===== EMAIL INFRASTRUCTURE SUMMARY =====
-function generateEmailInfrastructureSummary(mxAnalysis) {
-  const summary = {
-    primaryProvider: 'Unknown',
-    isUSBased: false,
-    providers: [],
-    infrastructure: [],
-    securityScore: 0,
-    recommendations: []
-  };
-  
-  // Analyze MX records for primary provider
-  if (mxAnalysis.mxRecords && mxAnalysis.mxRecords.providers) {
-    summary.providers = [...new Set(mxAnalysis.mxRecords.providers)];
-    summary.primaryProvider = summary.providers[0] || 'Unknown';
-    
-    // Check if US-based
-    summary.isUSBased = summary.providers.some(provider => 
-      provider.includes('US-based') || 
-      provider.includes('Google') || 
-      provider.includes('Microsoft') || 
-      provider.includes('Amazon')
-    );
-  }
-  
-  // Calculate security score
-  let score = 0;
-  
-  if (mxAnalysis.spfRecord?.exists) {
-    score += 25;
-    if (mxAnalysis.spfRecord.strength === 'strict') score += 10;
-  }
-  
-  if (mxAnalysis.dmarcRecord?.exists) {
-    score += 25;
-    if (mxAnalysis.dmarcRecord.strength === 'strict') score += 15;
-    else if (mxAnalysis.dmarcRecord.strength === 'moderate') score += 10;
-  }
-  
-  // TLS support (assumed for major providers)
-  if (summary.providers.some(p => p.includes('Google') || p.includes('Microsoft') || p.includes('Amazon'))) {
-    score += 20;
-  }
-  
-  summary.securityScore = Math.min(score, 100);
-  
-  // Generate recommendations
-  if (!mxAnalysis.spfRecord?.exists) {
-    summary.recommendations.push('Implement SPF record to prevent email spoofing');
-  }
-  
-  if (!mxAnalysis.dmarcRecord?.exists) {
-    summary.recommendations.push('Implement DMARC policy for email authentication');
-  }
-  
-  if (mxAnalysis.spfRecord?.strength === 'weak') {
-    summary.recommendations.push('Strengthen SPF policy (use -all instead of +all)');
-  }
-  
-  return summary;
-}
-
-// ===== GEOGRAPHIC DISTRIBUTION ANALYSIS =====
-function analyzeGeoDistribution(mxAnalysis) {
-  const distribution = {
-    countries: new Set(),
-    regions: new Set(),
-    infrastructure: {
-      web: new Set(),
-      email: new Set(),
-      dns: new Set()
-    },
-    usPresence: {
-      web: false,
-      email: false,
-      dns: false,
-      overall: false
-    }
-  };
-  
-  // Analyze web infrastructure (A records)
-  if (mxAnalysis.reverseIpAnalysis) {
-    for (const [ip, data] of Object.entries(mxAnalysis.reverseIpAnalysis)) {
-      if (data.geo) {
-        distribution.countries.add(data.geo.country);
-        distribution.regions.add(data.geo.region);
-        distribution.infrastructure.web.add(data.geo.country);
-        
-        if (data.geo.country === 'US') {
-          distribution.usPresence.web = true;
-        }
-      }
-    }
-  }
-  
-  // Analyze email infrastructure (MX records)
-  if (mxAnalysis.mxRecords?.insights) {
-    for (const insight of mxAnalysis.mxRecords.insights) {
-      distribution.countries.add(insight.country);
-      distribution.infrastructure.email.add(insight.country);
-      
-      if (insight.country === 'US') {
-        distribution.usPresence.email = true;
-      }
-    }
-  }
-  
-  // Analyze DNS infrastructure (NS records)
-  if (mxAnalysis.dnsRecords?.NS) {
-    // This would require additional NS IP resolution
-    // For now, we'll use heuristics based on NS names
-    for (const ns of mxAnalysis.dnsRecords.NS) {
-      if (ns.includes('cloudflare') || ns.includes('amazon') || ns.includes('google')) {
-        distribution.infrastructure.dns.add('US');
-        distribution.usPresence.dns = true;
-      }
-    }
-  }
-  
-  // Overall US presence
-  distribution.usPresence.overall = 
-    distribution.usPresence.web || 
-    distribution.usPresence.email || 
-    distribution.usPresence.dns;
-  
-  return {
-    countries: Array.from(distribution.countries),
-    regions: Array.from(distribution.regions),
-    infrastructure: {
-      web: Array.from(distribution.infrastructure.web),
-      email: Array.from(distribution.infrastructure.email),
-      dns: Array.from(distribution.infrastructure.dns)
-    },
-    usPresence: distribution.usPresence
-  };
-}
-
-// ===== EMAIL SECURITY ANALYSIS =====
-function analyzeEmailSecurity(mxAnalysis) {
-  const security = {
-    overallRating: 'Unknown',
-    spfStatus: 'Not Configured',
-    dmarcStatus: 'Not Configured',
-    tlsSupport: 'Unknown',
-    vulnerabilities: [],
-    strengths: [],
-    recommendations: []
-  };
-  
-  // SPF Analysis
-  if (mxAnalysis.spfRecord?.exists) {
-    security.spfStatus = `Configured (${mxAnalysis.spfRecord.strength})`;
-    if (mxAnalysis.spfRecord.strength === 'strict') {
-      security.strengths.push('Strong SPF policy (-all)');
-    } else if (mxAnalysis.spfRecord.strength === 'weak') {
-      security.vulnerabilities.push('Weak SPF policy (+all allows any server)');
-    }
-  } else {
-    security.vulnerabilities.push('No SPF record - vulnerable to email spoofing');
-  }
-  
-  // DMARC Analysis
-  if (mxAnalysis.dmarcRecord?.exists) {
-    security.dmarcStatus = `Configured (${mxAnalysis.dmarcRecord.policy})`;
-    if (mxAnalysis.dmarcRecord.policy === 'reject') {
-      security.strengths.push('Strong DMARC policy (reject)');
-    } else if (mxAnalysis.dmarcRecord.policy === 'none') {
-      security.vulnerabilities.push('DMARC policy set to none (monitoring only)');
-    }
-  } else {
-    security.vulnerabilities.push('No DMARC record - no email authentication policy');
-  }
-  
-  // TLS Support (inferred from provider)
-  if (mxAnalysis.mxRecords?.providers?.some(p => 
-    p.includes('Google') || p.includes('Microsoft') || p.includes('Amazon') || p.includes('Cloudflare')
-  )) {
-    security.tlsSupport = 'Supported';
-    security.strengths.push('TLS encryption supported by email provider');
-  }
-  
-  // Calculate overall rating
-  const strengthScore = security.strengths.length * 2;
-  const vulnerabilityScore = security.vulnerabilities.length;
-  
-  if (strengthScore >= 4 && vulnerabilityScore === 0) {
-    security.overallRating = 'Excellent';
-  } else if (strengthScore >= 2 && vulnerabilityScore <= 1) {
-    security.overallRating = 'Good';
-  } else if (strengthScore >= 1 && vulnerabilityScore <= 2) {
-    security.overallRating = 'Fair';
-  } else {
-    security.overallRating = 'Poor';
-  }
-  
-  return security;
-}// File Location: /server.js
+// File Location: /server.js
 // WHOIS Backend Server - Production Ready for GitHub Apps + Railway
 // Node.js + Express backend for domain intelligence analysis
 
@@ -444,7 +86,7 @@ app.get('/api/status', (req, res) => {
     api: 'WHOIS Intelligence Tool',
     version: '1.0.0',
     status: 'operational',
-    endpoints: ['/api/analyze', '/api/bulk-analyze'],
+    endpoints: ['/api/analyze', '/api/bulk-analyze', '/api/mx-analysis'],
     rateLimit: '300 requests per 15 minutes',
     cache: '6 hours TTL'
   });
@@ -618,6 +260,81 @@ app.post('/api/bulk-analyze', async (req, res) => {
   }
 });
 
+// ===== MX TOOLBOX STYLE ANALYSIS ENDPOINT =====
+app.post('/api/mx-analysis', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { domain } = req.body;
+    
+    if (!domain) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Domain parameter is required for MX analysis'
+      });
+    }
+    
+    const cleanDomain = cleanDomainName(domain);
+    console.log(`[MX ANALYSIS] Starting comprehensive analysis for: ${cleanDomain}`);
+    
+    const mxAnalysis = {
+      domain: cleanDomain,
+      timestamp: new Date().toISOString(),
+      success: true,
+      dnsRecords: null,
+      mxRecords: null,
+      spfRecord: null,
+      dmarcRecord: null,
+      reverseIpAnalysis: null,
+      emailInfrastructure: null,
+      geoDistribution: null,
+      securityAnalysis: null
+    };
+    
+    // 1. Comprehensive DNS Analysis
+    mxAnalysis.dnsRecords = await getDNSRecords(cleanDomain);
+    
+    // 2. Enhanced MX Analysis
+    mxAnalysis.mxRecords = await analyzeMXRecords(cleanDomain);
+    
+    // 3. SPF Record Analysis
+    mxAnalysis.spfRecord = await analyzeSPFRecord(cleanDomain);
+    
+    // 4. DMARC Record Analysis
+    mxAnalysis.dmarcRecord = await analyzeDMARCRecord(cleanDomain);
+    
+    // 5. Reverse IP Analysis for all A records
+    if (mxAnalysis.dnsRecords.A && mxAnalysis.dnsRecords.A.length > 0) {
+      mxAnalysis.reverseIpAnalysis = {};
+      for (const ip of mxAnalysis.dnsRecords.A.slice(0, 3)) {
+        mxAnalysis.reverseIpAnalysis[ip] = await performReverseIPAnalysis(ip);
+      }
+    }
+    
+    // 6. Email Infrastructure Summary
+    mxAnalysis.emailInfrastructure = generateEmailInfrastructureSummary(mxAnalysis);
+    
+    // 7. Geographic Distribution
+    mxAnalysis.geoDistribution = analyzeGeoDistribution(mxAnalysis);
+    
+    // 8. Security Analysis
+    mxAnalysis.securityAnalysis = analyzeEmailSecurity(mxAnalysis);
+    
+    mxAnalysis.processingTime = Date.now() - startTime;
+    
+    res.json(mxAnalysis);
+    
+  } catch (error) {
+    console.error('[MX ANALYSIS ERROR]', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'MX analysis failed',
+      message: error.message,
+      responseTime: Date.now() - startTime
+    });
+  }
+});
+
 // ===== CORE ANALYSIS FUNCTION =====
 async function performDomainAnalysis(domain) {
   const startTime = Date.now();
@@ -658,8 +375,8 @@ async function performDomainAnalysis(domain) {
     
     console.log(`[ANALYSIS] Processing intelligence for ${domain}...`);
     
-    // 3. Privacy Protection Analysis
-    analysis.privacyAnalysis = analyzePrivacyProtection(analysis.whoisData);
+    // 3. Enhanced Privacy Protection Analysis with recursive investigation
+    analysis.privacyAnalysis = await analyzePrivacyProtection(analysis.whoisData);
     
     // 4. Registrar Analysis (US detection)
     analysis.registrarInfo = analyzeRegistrar(analysis.whoisData);
@@ -1266,6 +983,289 @@ async function detectActualCompany(analysis) {
   return companyIntelligence;
 }
 
+// ===== SPF RECORD ANALYSIS =====
+async function analyzeSPFRecord(domain) {
+  try {
+    const txtRecords = await dns.resolveTxt(domain);
+    const spfRecord = txtRecords.find(record => 
+      record.join('').toLowerCase().startsWith('v=spf1')
+    );
+    
+    if (!spfRecord) {
+      return { exists: false, record: null, analysis: 'No SPF record found' };
+    }
+    
+    const spfString = spfRecord.join('');
+    const mechanisms = spfString.split(' ').filter(part => part.length > 0);
+    
+    const analysis = {
+      exists: true,
+      record: spfString,
+      mechanisms: mechanisms,
+      includes: mechanisms.filter(m => m.startsWith('include:')),
+      ipRanges: mechanisms.filter(m => m.startsWith('ip4:') || m.startsWith('ip6:')),
+      all: mechanisms.find(m => m.startsWith('~all') || m.startsWith('-all') || m.startsWith('+all')),
+      strength: 'unknown'
+    };
+    
+    // Determine SPF strength
+    if (analysis.all === '-all') {
+      analysis.strength = 'strict';
+    } else if (analysis.all === '~all') {
+      analysis.strength = 'soft';
+    } else if (analysis.all === '+all') {
+      analysis.strength = 'weak';
+    }
+    
+    return analysis;
+    
+  } catch (error) {
+    return { exists: false, error: error.message };
+  }
+}
+
+// ===== DMARC RECORD ANALYSIS =====
+async function analyzeDMARCRecord(domain) {
+  try {
+    const dmarcDomain = `_dmarc.${domain}`;
+    const txtRecords = await dns.resolveTxt(dmarcDomain);
+    const dmarcRecord = txtRecords.find(record => 
+      record.join('').toLowerCase().startsWith('v=dmarc1')
+    );
+    
+    if (!dmarcRecord) {
+      return { exists: false, record: null, analysis: 'No DMARC record found' };
+    }
+    
+    const dmarcString = dmarcRecord.join('');
+    const tags = {};
+    
+    // Parse DMARC tags
+    dmarcString.split(';').forEach(tag => {
+      const [key, value] = tag.trim().split('=');
+      if (key && value) {
+        tags[key.trim()] = value.trim();
+      }
+    });
+    
+    return {
+      exists: true,
+      record: dmarcString,
+      policy: tags.p || 'none',
+      subdomainPolicy: tags.sp,
+      percentage: tags.pct || '100',
+      reportingEmails: {
+        aggregate: tags.rua,
+        forensic: tags.ruf
+      },
+      alignment: {
+        spf: tags.aspf || 'r',
+        dkim: tags.adkim || 'r'
+      },
+      strength: tags.p === 'reject' ? 'strict' : tags.p === 'quarantine' ? 'moderate' : 'weak'
+    };
+    
+  } catch (error) {
+    return { exists: false, error: error.message };
+  }
+}
+
+// ===== EMAIL INFRASTRUCTURE SUMMARY =====
+function generateEmailInfrastructureSummary(mxAnalysis) {
+  const summary = {
+    primaryProvider: 'Unknown',
+    isUSBased: false,
+    providers: [],
+    infrastructure: [],
+    securityScore: 0,
+    recommendations: []
+  };
+  
+  // Analyze MX records for primary provider
+  if (mxAnalysis.mxRecords && mxAnalysis.mxRecords.providers) {
+    summary.providers = [...new Set(mxAnalysis.mxRecords.providers)];
+    summary.primaryProvider = summary.providers[0] || 'Unknown';
+    
+    // Check if US-based
+    summary.isUSBased = summary.providers.some(provider => 
+      provider.includes('US-based') || 
+      provider.includes('Google') || 
+      provider.includes('Microsoft') || 
+      provider.includes('Amazon')
+    );
+  }
+  
+  // Calculate security score
+  let score = 0;
+  
+  if (mxAnalysis.spfRecord?.exists) {
+    score += 25;
+    if (mxAnalysis.spfRecord.strength === 'strict') score += 10;
+  }
+  
+  if (mxAnalysis.dmarcRecord?.exists) {
+    score += 25;
+    if (mxAnalysis.dmarcRecord.strength === 'strict') score += 15;
+    else if (mxAnalysis.dmarcRecord.strength === 'moderate') score += 10;
+  }
+  
+  // TLS support (assumed for major providers)
+  if (summary.providers.some(p => p.includes('Google') || p.includes('Microsoft') || p.includes('Amazon'))) {
+    score += 20;
+  }
+  
+  summary.securityScore = Math.min(score, 100);
+  
+  // Generate recommendations
+  if (!mxAnalysis.spfRecord?.exists) {
+    summary.recommendations.push('Implement SPF record to prevent email spoofing');
+  }
+  
+  if (!mxAnalysis.dmarcRecord?.exists) {
+    summary.recommendations.push('Implement DMARC policy for email authentication');
+  }
+  
+  if (mxAnalysis.spfRecord?.strength === 'weak') {
+    summary.recommendations.push('Strengthen SPF policy (use -all instead of +all)');
+  }
+  
+  return summary;
+}
+
+// ===== GEOGRAPHIC DISTRIBUTION ANALYSIS =====
+function analyzeGeoDistribution(mxAnalysis) {
+  const distribution = {
+    countries: new Set(),
+    regions: new Set(),
+    infrastructure: {
+      web: new Set(),
+      email: new Set(),
+      dns: new Set()
+    },
+    usPresence: {
+      web: false,
+      email: false,
+      dns: false,
+      overall: false
+    }
+  };
+  
+  // Analyze web infrastructure (A records)
+  if (mxAnalysis.reverseIpAnalysis) {
+    for (const [ip, data] of Object.entries(mxAnalysis.reverseIpAnalysis)) {
+      if (data.geo) {
+        distribution.countries.add(data.geo.country);
+        distribution.regions.add(data.geo.region);
+        distribution.infrastructure.web.add(data.geo.country);
+        
+        if (data.geo.country === 'US') {
+          distribution.usPresence.web = true;
+        }
+      }
+    }
+  }
+  
+  // Analyze email infrastructure (MX records)
+  if (mxAnalysis.mxRecords?.insights) {
+    for (const insight of mxAnalysis.mxRecords.insights) {
+      distribution.countries.add(insight.country);
+      distribution.infrastructure.email.add(insight.country);
+      
+      if (insight.country === 'US') {
+        distribution.usPresence.email = true;
+      }
+    }
+  }
+  
+  // Analyze DNS infrastructure (NS records)
+  if (mxAnalysis.dnsRecords?.NS) {
+    for (const ns of mxAnalysis.dnsRecords.NS) {
+      if (ns.includes('cloudflare') || ns.includes('amazon') || ns.includes('google')) {
+        distribution.infrastructure.dns.add('US');
+        distribution.usPresence.dns = true;
+      }
+    }
+  }
+  
+  // Overall US presence
+  distribution.usPresence.overall = 
+    distribution.usPresence.web || 
+    distribution.usPresence.email || 
+    distribution.usPresence.dns;
+  
+  return {
+    countries: Array.from(distribution.countries),
+    regions: Array.from(distribution.regions),
+    infrastructure: {
+      web: Array.from(distribution.infrastructure.web),
+      email: Array.from(distribution.infrastructure.email),
+      dns: Array.from(distribution.infrastructure.dns)
+    },
+    usPresence: distribution.usPresence
+  };
+}
+
+// ===== EMAIL SECURITY ANALYSIS =====
+function analyzeEmailSecurity(mxAnalysis) {
+  const security = {
+    overallRating: 'Unknown',
+    spfStatus: 'Not Configured',
+    dmarcStatus: 'Not Configured',
+    tlsSupport: 'Unknown',
+    vulnerabilities: [],
+    strengths: [],
+    recommendations: []
+  };
+  
+  // SPF Analysis
+  if (mxAnalysis.spfRecord?.exists) {
+    security.spfStatus = `Configured (${mxAnalysis.spfRecord.strength})`;
+    if (mxAnalysis.spfRecord.strength === 'strict') {
+      security.strengths.push('Strong SPF policy (-all)');
+    } else if (mxAnalysis.spfRecord.strength === 'weak') {
+      security.vulnerabilities.push('Weak SPF policy (+all allows any server)');
+    }
+  } else {
+    security.vulnerabilities.push('No SPF record - vulnerable to email spoofing');
+  }
+  
+  // DMARC Analysis
+  if (mxAnalysis.dmarcRecord?.exists) {
+    security.dmarcStatus = `Configured (${mxAnalysis.dmarcRecord.policy})`;
+    if (mxAnalysis.dmarcRecord.policy === 'reject') {
+      security.strengths.push('Strong DMARC policy (reject)');
+    } else if (mxAnalysis.dmarcRecord.policy === 'none') {
+      security.vulnerabilities.push('DMARC policy set to none (monitoring only)');
+    }
+  } else {
+    security.vulnerabilities.push('No DMARC record - no email authentication policy');
+  }
+  
+  // TLS Support (inferred from provider)
+  if (mxAnalysis.mxRecords?.providers?.some(p => 
+    p.includes('Google') || p.includes('Microsoft') || p.includes('Amazon') || p.includes('Cloudflare')
+  )) {
+    security.tlsSupport = 'Supported';
+    security.strengths.push('TLS encryption supported by email provider');
+  }
+  
+  // Calculate overall rating
+  const strengthScore = security.strengths.length * 2;
+  const vulnerabilityScore = security.vulnerabilities.length;
+  
+  if (strengthScore >= 4 && vulnerabilityScore === 0) {
+    security.overallRating = 'Excellent';
+  } else if (strengthScore >= 2 && vulnerabilityScore <= 1) {
+    security.overallRating = 'Good';
+  } else if (strengthScore >= 1 && vulnerabilityScore <= 2) {
+    security.overallRating = 'Fair';
+  } else {
+    security.overallRating = 'Poor';
+  }
+  
+  return security;
+}
+
 // ===== REGISTRAR ANALYSIS (US DETECTION) =====
 function analyzeRegistrar(whoisData) {
   const registrar = whoisData.registrar || 'Unknown';
@@ -1528,7 +1528,7 @@ app.use((req, res) => {
   res.status(404).json({ 
     success: false,
     error: 'Endpoint not found',
-    availableEndpoints: ['/health', '/api/status', '/api/analyze', '/api/bulk-analyze']
+    availableEndpoints: ['/health', '/api/status', '/api/analyze', '/api/bulk-analyze', '/api/mx-analysis']
   });
 });
 
@@ -1543,6 +1543,7 @@ app.listen(PORT, () => {
   console.log(`🔧 API status: http://localhost:${PORT}/api/status`);
   console.log(`💾 Cache TTL: 6 hours`);
   console.log(`⚡ Rate limit: 300 requests per 15 minutes`);
+  console.log(`🔍 Features: Recursive privacy analysis, MX Toolbox integration`);
   console.log('='.repeat(60));
 });
 
