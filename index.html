@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<!-- File Location: /index.html -->
+<!-- WHOIS Intelligence Tool - Frontend with Dark Mode Support -->
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WHOIS Intelligence Tool - Domain Analysis</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --card-shadow-hover: 0 8px 15px rgba(0, 0, 0, 0.15);
+            --border-radius: 15px;
+            --transition: all 0.3s ease;
+        }
+
+        /* Dark mode variables */
+        [data-bs-theme="dark"] {
+            --bs-body-bg: #1a1a1a;
+            --bs-body-color: #ffffff;
+            --bs-card-bg: #2d2d2d;
+            --bs-border-color: #404040;
+            --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            --card-shadow-hover: 0 8px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        /* High contrast mode variables */
+        [data-contrast="high"] {
+            --bs-body-bg: #000000;
+            --bs-body-color: #ffffff;
+            --bs-card-bg: #1a1a1a;
+            --bs-border-color: #ffffff;
+            --card-shadow: 0 4px 6px rgba(255, 255, 255, 0.2);
+        }
+
+        body {
+            background: var(--primary-gradient);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: var(--transition);
+        }
+
+        /* High contrast body override */
+        [data-contrast="high"] body {
+            background: #000000;
+            color: #ffffff;
+        }
+        
+        .main-container {
+            background: var(--bs-card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            margin: 2rem auto;
+            max-width: 1400px;
+            border: 2px solid var(--bs-border-color);
+        }
+        
+        .hero-section {
+            background: var(--primary-gradient);
+            color: white;
+            border-radius: 20px 20px 0 0;
+            padding: 3rem 2rem;
+            position: relative;
+        }
+
+        /* High contrast hero section */
+        [data-contrast="high"] .hero-section {
+            background: #000000;
+            border: 2px solid #ffffff;
+            color: #ffffff;
+        }
+
+        .theme-controls {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            z-index: 1000;
+        }
+
+        .theme-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .theme-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .theme-btn.active {
+            background: rgba(255, 255, 255, 0.4);
+            border-color: white;
+        }
+
+        /* High contrast theme buttons */
+        [data-contrast="high"] .theme-btn {
+            background: #000000;
+            border: 2px solid #ffffff;
+            color: #ffffff;
+        }
+
+        [data-contrast="high"] .theme-btn:hover {
+            background: #333333;
+        }
+        
+        .nav-pills .nav-link {
+            color: var(--bs-body-color) !important;
+            background-color: var(--bs-card-bg);
+            border-radius: 25px;
+            margin: 0 0.5rem;
+            font-weight: 600;
+            border: 2px solid var(--bs-border-color);
+            transition: var(--transition);
+        }
+        
+        .nav-pills .nav-link.active {
+            background-color: var(--bs-card-bg) !important;
+            color: #667eea !important;
+            box-shadow: var(--card-shadow);
+            border-color: #667eea;
+        }
+
+        /* High contrast nav links */
+        [data-contrast="high"] .nav-pills .nav-link {
+            background-color: #000000;
+            color: #ffffff !important;
+            border: 2px solid #ffffff;
+        }
+
+        [data-contrast="high"] .nav-pills .nav-link.active {
+            background-color: #ffffff;
+            color: #000000 !important;
+        }
+        
+        .analysis-card {
+            border: 2px solid var(--bs-border-color);
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            margin-bottom: 1.5rem;
+            transition: var(--transition);
+            background: var(--bs-card-bg);
+        }
+        
+        .analysis-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        /* High contrast cards */
+        [data-contrast="high"] .analysis-card {
+            border: 2px solid #ffffff;
+            background: #000000;
+        }
+        
+        .btn-gradient {
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 600;
+            color: white;
+            transition: var(--transition);
+        }
+        
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+
+        /* High contrast buttons */
+        [data-contrast="high"] .btn-gradient {
+            background: #ffffff;
+            color: #000000;
+            border: 2px solid #ffffff;
+        }
+
+        [data-contrast="high"] .btn-gradient:hover {
+            background: #cccccc;
+            color: #000000;
+        }
+        
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            margin: 2rem 0;
+        }
+        
+        .metric-card {
+            text-align: center;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            background: var(--bs-card-bg);
+            border: 2px solid var(--bs-border-color);
+            margin-bottom: 1rem;
+            transition: var(--transition);
+        }
+
+        /* High contrast metric cards */
+        [data-contrast="high"] .metric-card {
+            background: #000000;
+            border: 2px solid #ffffff;
+            color: #ffffff;
+        }
+        
+        .metric-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        [data-contrast="high"] .metric-number {
+            color: #ffffff;
+        }
+        
+        .privacy-badge, .flag-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-weight: 600;
+            margin: 0.25rem;
+            font-size: 0.9rem;
+            border: 2px solid;
+            transition: var(--transition);
+        }
+        
+        .privacy-protected {
+            background: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+
+        [data-contrast="high"] .privacy-protected {
+            background: #000000;
+            color: #00ff00;
+            border-color: #00ff00;
+        }
+        
+        .privacy-public {
+            background: #fff3cd;
+            color: #856404;
+            border-color: #ffeaa7;
+        }
+
+        [data-contrast="high"] .privacy-public {
+            background: #000000;
+            color: #ffff00;
+            border-color: #ffff00;
+        }
+        
+        .us-registrar {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-color: #bee5eb;
+        }
+
+        [data-contrast="high"] .us-registrar {
+            background: #000000;
+            color: #00ffff;
+            border-color: #00ffff;
+        }
+        
+        .non-us-registrar {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+
+        [data-contrast="high"] .non-us-registrar {
+            background: #000000;
+            color: #ff0000;
+            border-color: #ff0000;
+        }
+        
+        .priority-high {
+            border-left: 5px solid #dc3545;
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        [data-contrast="high"] .priority-high {
+            border-left: 5px solid #ff0000;
+            background: #000000;
+        }
+        
+        .priority-normal {
+            border-left: 5px solid #28a745;
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        [data-contrast="high"] .priority-normal {
+            border-left: 5px solid #00ff00;
+            background: #000000;
+        }
+        
+        .workflow-alert {
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-weight: 600;
+            border: 2px solid;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border-color: #ffeaa7;
+        }
+
+        [data-contrast="high"] .alert-warning {
+            background: #000000;
+            color: #ffff00;
+            border-color: #ffff00;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-color: #bee5eb;
+        }
+
+        [data-contrast="high"] .alert-info {
+            background: #000000;
+            color: #00ffff;
+            border-color: #00ffff;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+
+        [data-contrast="high"] .alert-success {
+            background: #000000;
+            color: #00ff00;
+            border-color: #00ff00;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+
+        [data-contrast="high"] .alert-danger {
+            background: #000000;
+            color: #ff0000;
+            border-color: #ff0000;
+        }
+        
+        .cache-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid #28a745;
+        }
+
+        [data-contrast="high"] .cache-indicator {
+            background: #000000;
+            color: #00ff00;
+            border-color: #00ff00;
+        }
+        
+        .export-section {
+            background: var(--bs-card-bg);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            margin-top: 2rem;
+            border: 2px solid var(--bs-border-color);
+        }
+
+        [data-contrast="high"] .export-section {
+            background: #000000;
+            border-color: #ffffff;
+        }
+        
+        .quick-stats {
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+        }
+
+        [data-contrast="high"] .quick-stats {
+            background: #000000;
+            border-color: #ffffff;
+            color: #ffffff;
+        }
+
+        /* Form controls styling */
+        .form-control, .form-select {
+            background: var(--bs-card-bg);
+            border: 2px solid var(--bs-border-color);
+            color: var(--bs-body-color);
+        }
+
+        .form-control:focus, .form-select:focus {
+            background: var(--bs-card-bg);
+            border-color: #667eea;
+            color: var(--bs-body-color);
+            box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.25);
+        }
+
+        [data-contrast="high"] .form-control,
+        [data-contrast="high"] .form-select {
+            background: #000000;
+            border: 2px solid #ffffff;
+            color: #ffffff;
+        }
+
+        [data-contrast="high"] .form-control:focus,
+        [data-contrast="high"] .form-select:focus {
+            background: #000000;
+            border-color: #ffffff;
+            color: #ffffff;
+            box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25);
+        }
+
+        /* Table styling */
+        .table {
+            color: var(--bs-body-color);
+        }
+
+        [data-contrast="high"] .table {
+            color: #ffffff;
+        }
+
+        .table-borderless td {
+            border: none;
+            color: var(--bs-body-color);
+        }
+
+        [data-contrast="high"] .table-borderless td {
+            color: #ffffff;
+        }
+
+        /* Code styling */
+        code {
+            background: var(--bs-card-bg);
+            color: var(--bs-body-color);
+            border: 1px solid var(--bs-border-color);
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+        }
+
+        [data-contrast="high"] code {
+            background: #000000;
+            color: #ffffff;
+            border-color: #ffffff;
+        }
+
+        /* Progress bar styling */
+        .progress {
+            background: var(--bs-card-bg);
+            border: 1px solid var(--bs-border-color);
+        }
+
+        [data-contrast="high"] .progress {
+            background: #000000;
+            border-color: #ffffff;
+        }
+
+        /* Responsive design improvements */
+        @media (max-width: 768px) {
+            .theme-controls {
+                position: relative;
+                top: 0;
+                right: 0;
+                justify-content: center;
+                margin-bottom: 1rem;
+            }
+
+            .hero-section {
+                padding: 2rem 1rem;
+            }
+
+            .main-container {
+                margin: 1rem;
+            }
+        }
+
+        /* Loading animation */
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .loading-spinner {
+            animation: pulse 2s infinite;
+        }
+
+        /* Smooth transitions for theme changes */
+        * {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="main-container">
+            <!-- Hero Section -->
+            <div class="hero-section text-center">
+                <!-- Theme Controls -->
+                <div class="theme-controls">
+                    <button class="theme-btn" id="lightMode" title="Light Mode">
+                        <i class="bi bi-sun"></i>
+                    </button>
+                    <button class="theme-btn" id="darkMode" title="Dark Mode">
+                        <i class="bi bi-moon"></i>
+                    </button>
+                    <button class="theme-btn" id="contrastMode" title="High Contrast">
+                        <i class="bi bi-circle-half"></i>
+                    </button>
+                </div>
+
+                <h1 class="display-4 fw-bold mb-3">
+                    <i class="bi bi-search"></i> WHOIS Intelligence Tool
+                </h1>
+                <p class="lead mb-4">Professional Domain Analysis & Intelligence for Legal Workflows</p>
+                
+                <!-- Navigation Tabs -->
+                <ul class="nav nav-pills justify-content-center mb-4" id="mainTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="domain-tab" data-bs-toggle="pill" 
+                                data-bs-target="#domain-analysis" type="button" role="tab">
+                            <i class="bi bi-globe"></i> Single Domain
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="bulk-tab" data-bs-toggle="pill" 
+                                data-bs-target="#bulk-analysis" type="button" role="tab">
+                            <i class="bi bi-list-ul"></i> Bulk Analysis
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="report-tab" data-bs-toggle="pill" 
+                                data-bs-target="#report-section" type="button" role="tab">
+                            <i class="bi bi-file-text"></i> Reports
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="mainTabContent">
+                    <!-- Single Domain Analysis Tab -->
+                    <div class="tab-pane fade show active" id="domain-analysis" role="tabpanel">
+                        <form id="domainForm" class="row g-3 justify-content-center">
+                            <div class="col-auto">
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text"><i class="bi bi-globe"></i></span>
+                                    <input type="text" class="form-control" id="domainInput" 
+                                           placeholder="Enter domain (e.g., google.com)" 
+                                           style="min-width: 350px;" required>
+                                    <button class="btn btn-gradient" type="submit" id="analyzeBtn">
+                                        <i class="bi bi-search"></i> Analyze
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                        <div class="mt-3">
+                            <small class="text-light">
+                                <i class="bi bi-lightning"></i> Instant US registrar detection • Privacy analysis • DNS intelligence
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Analysis Tab -->
+                    <div class="tab-pane fade" id="bulk-analysis" role="tabpanel">
+                        <form id="bulkForm" class="row g-3 justify-content-center">
+                            <div class="col-12 col-md-8">
+                                <textarea class="form-control" id="bulkDomains" rows="6" 
+                                          placeholder="Enter multiple domains, one per line:&#10;&#10;example.com&#10;test.org&#10;sample.net&#10;&#10;Maximum 10 domains per analysis"></textarea>
+                            </div>
+                            <div class="col-12 text-center">
+                                <button class="btn btn-gradient" type="submit" id="bulkAnalyzeBtn">
+                                    <i class="bi bi-rocket-takeoff"></i> Analyze All Domains
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Reports Tab -->
+                    <div class="tab-pane fade" id="report-section" role="tabpanel">
+                        <div class="row justify-content-center">
+                            <div class="col-md-8">
+                                <div class="text-center">
+                                    <h4 class="mb-3">Export Analysis Reports</h4>
+                                    <p class="mb-4">Generate comprehensive reports for legal documentation and case files</p>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <button class="btn btn-success w-100" onclick="exportDetailedReport()">
+                                                <i class="bi bi-file-text"></i><br>
+                                                Legal Report
+                                                <small class="d-block">Detailed analysis for court filings</small>
+                                            </button>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <button class="btn btn-primary w-100" onclick="exportExecutiveSummary()">
+                                                <i class="bi bi-clipboard-data"></i><br>
+                                                Executive Summary
+                                                <small class="d-block">High-level overview</small>
+                                            </button>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <button class="btn btn-info w-100" onclick="exportRawData()">
+                                                <i class="bi bi-database"></i><br>
+                                                Raw Data
+                                                <small class="d-block">JSON/CSV for further analysis</small>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Section -->
+            <div class="loading-spinner" id="loadingSpinner">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3">Analyzing domain information...</p>
+                <div class="progress" style="height: 8px; max-width: 400px; margin: 0 auto;">
+                    <div class="progress-bar bg-primary" id="progressBar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted" id="loadingStatus">Initializing analysis...</small>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="container" id="resultsContainer" style="display: none;">
+                <div class="row py-4">
+                    <!-- Quick Summary Bar -->
+                    <div class="col-12" id="quickSummary" style="display: none;">
+                        <div class="quick-stats">
+                            <div class="row text-center">
+                                <div class="col-md-3">
+                                    <strong id="usRegistrarCount">0</strong><br>
+                                    <small>US Registrars</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong id="privacyProtectedCount">0</strong><br>
+                                    <small>Privacy Protected</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong id="highPriorityCount">0</strong><br>
+                                    <small>High Priority</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong id="totalProcessingTime">0</strong>ms<br>
+                                    <small>Total Time</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Success Alert -->
+                    <div class="col-12">
+                        <div class="alert alert-success d-flex align-items-center mb-4" role="alert" id="successAlert" style="display: none;">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <div>
+                                <strong>Analysis Complete!</strong> <span id="resultSummary"></span>
+                            </div>
+                        </div>
+                        
+                        <!-- Error Alert -->
+                        <div class="alert alert-danger d-flex align-items-center mb-4" role="alert" id="errorAlert" style="display: none;">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <div>
+                                <strong>Error:</strong> <span id="errorMessage"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Results -->
+                    <div class="col-12" id="analysisResults">
+                        <!-- Results will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // ===== GLOBAL VARIABLES =====
+        let analysisData = [];
+        let currentAnalysisId = 0;
+
+        // Backend API configuration
+        const API_BASE_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3001' 
+            : '';
+
+        // ===== THEME MANAGEMENT =====
+        class ThemeManager {
+            constructor() {
+                this.currentTheme = localStorage.getItem('theme') || 'light';
+                this.currentContrast = localStorage.getItem('contrast') || 'normal';
+                this.init();
+            }
+
+            init() {
+                this.applyTheme();
+                this.bindEvents();
+                this.updateButtons();
+            }
+
+            bindEvents() {
+                document.getElementById('lightMode').addEventListener('click', () => this.setTheme('light'));
+                document.getElementById('darkMode').addEventListener('click', () => this.setTheme('dark'));
+                document.getElementById('contrastMode').addEventListener('click', () => this.toggleContrast());
+            }
+
+            setTheme(theme) {
+                this.currentTheme = theme;
+                this.currentContrast = 'normal';
+                localStorage.setItem('theme', theme);
+                localStorage.setItem('contrast', 'normal');
+                this.applyTheme();
+                this.updateButtons();
+            }
+
+            toggleContrast() {
+                if (this.currentContrast === 'high') {
+                    this.currentContrast = 'normal';
+                    this.currentTheme = 'light';
+                } else {
+                    this.currentContrast = 'high';
+                    this.currentTheme = 'dark';
+                }
+                localStorage.setItem('theme', this.currentTheme);
+                localStorage.setItem('contrast', this.currentContrast);
+                this.applyTheme();
+                this.updateButtons();
+            }
+
+            applyTheme() {
+                document.documentElement.setAttribute('data-bs-theme', this.currentTheme);
+                document.documentElement.setAttribute('data-contrast', this.currentContrast);
+            }
+
+            updateButtons() {
+                document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('active'));
+                
+                if (this.currentContrast === 'high') {
+                    document.getElementById('contrastMode').classList.add('active');
+                } else if (this.currentTheme === 'dark') {
+                    document.getElementById('darkMode').classList.add('active');
+                } else {
+                    document.getElementById('lightMode').classList.add('active');
+                }
+            }
+        }
+
+        // ===== APPLICATION INITIALIZATION =====
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize theme manager
+            new ThemeManager();
+            
+            // Focus on domain input
+            document.getElementById('domainInput').focus();
+            
+            // Set up form handlers
+            document.getElementById('domainForm').addEventListener('submit', handleSingleDomain);
+            document.getElementById('bulkForm').addEventListener('submit', handleBulkDomains);
+            
+            // Auto-submit on Enter in domain input
+            document.getElementById('domainInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSingleDomain(e);
+                }
+            });
+
+            // Check backend status on load
+            checkBackendStatus();
+        });
+
+        // ===== BACKEND STATUS CHECK =====
+        async function checkBackendStatus() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Backend connected:', data);
+                } else {
+                    console.warn('⚠️ Backend health check failed');
+                }
+            } catch (error) {
+                console.warn('⚠️ Backend not available:', error.message);
+            }
+        }
+
+        // ===== UI FUNCTIONS =====
+        function showLoading(status = 'Initializing analysis...') {
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('resultsContainer').style.display = 'none';
+            document.getElementById('loadingStatus').textContent = status;
+            updateProgress(0);
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingSpinner').style.display = 'none';
+        }
+
+        function updateProgress(percentage, status = null) {
+            document.getElementById('progressBar').style.width = percentage + '%';
+            if (status) {
+                document.getElementById('loadingStatus').textContent = status;
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('errorAlert').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('successAlert').style.display = 'none';
+            document.getElementById('quickSummary').style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            document.getElementById('successAlert').style.display = 'block';
+            document.getElementById('resultSummary').textContent = message;
+            document.getElementById('errorAlert').style.display = 'none';
+            updateQuickSummary();
+        }
+
+        // ===== DOMAIN ANALYSIS HANDLERS =====
+        async function handleSingleDomain(event) {
+            event.preventDefault();
+            
+            const domain = document.getElementById('domainInput').value.trim();
+            if (!domain) return;
+            
+            showLoading('Connecting to analysis server...');
+            
+            try {
+                updateProgress(25, 'Fetching WHOIS data...');
+                
+                const response = await fetch(`${API_BASE_URL}/api/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Analysis failed: ${response.status} ${response.statusText}`);
+                }
+                
+                updateProgress(75, 'Processing domain intelligence...');
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Analysis failed');
+                }
+                
+                analysisData = [convertBackendResponse(data)];
+                
+                updateProgress(100, 'Analysis complete!');
+                
+                setTimeout(() => {
+                    hideLoading();
+                    showSuccess(`Analysis completed for ${domain}${data.fromCache ? ' (cached)' : ''}`);
+                    displayResults();
+                    document.getElementById('resultsContainer').style.display = 'block';
+                }, 500);
+                
+            } catch (error) {
+                hideLoading();
+                document.getElementById('resultsContainer').style.display = 'block';
+                showError(`Failed to analyze ${domain}: ${error.message}`);
+            }
+        }
+
+        async function handleBulkDomains(event) {
+            event.preventDefault();
+            
+            const domainsText = document.getElementById('bulkDomains').value.trim();
+            if (!domainsText) return;
+            
+            const domains = domainsText.split('\n')
+                .map(d => d.trim())
+                .filter(d => d.length > 0);
+            
+            if (domains.length === 0) return;
+            if (domains.length > 10) {
+                showError('Maximum 10 domains allowed for bulk analysis');
+                return;
+            }
+            
+            showLoading(`Analyzing ${domains.length} domains...`);
+            
+            try {
+                updateProgress(10, 'Sending bulk request...');
+                
+                const response = await fetch(`${API_BASE_URL}/api/bulk-analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domains })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Bulk analysis failed: ${response.status} ${response.statusText}`);
+                }
+                
+                updateProgress(90, 'Processing results...');
+                
+                const data = await response.json();
+                
+                analysisData = data.results.map(result => 
+                    result.success !== false ? convertBackendResponse(result) : result
+                );
+                
+                updateProgress(100, 'Bulk analysis complete!');
+                
+                setTimeout(() => {
+                    hideLoading();
+                    const successCount = analysisData.filter(a => !a.error).length;
+                    showSuccess(`Analyzed ${successCount} of ${domains.length} domains (${data.responseTime}ms)`);
+                    displayResults();
+                    document.getElementById('resultsContainer').style.display = 'block';
+                }, 500);
+                
+            } catch (error) {
+                hideLoading();
+                document.getElementById('resultsContainer').style.display = 'block';
+                showError(`Bulk analysis failed: ${error.message}`);
+            }
+        }
+
+        // ===== DATA CONVERSION =====
+        function convertBackendResponse(data) {
+            return {
+                id: ++currentAnalysisId,
+                domain: data.domain,
+                timestamp: data.timestamp,
+                fromCache: data.fromCache || false,
+                processingTime: data.processingTime || 0,
+                success: data.success,
+                error: data.error,
+                
+                // WHOIS Data
+                registrar: data.registrarInfo?.name || 'Unknown',
+                registrarCategory: data.registrarInfo?.category || 'Unknown',
+                isUSRegistrar: data.registrarInfo?.isUSBased || false,
+                
+                // Domain Info
+                creationDate: data.whoisData?.creationDate || 'Unknown',
+                expirationDate: data.whoisData?.expirationDate || 'Unknown',
+                status: data.whoisData?.status || 'Unknown',
+                country: data.whoisData?.registrantCountry || 'Unknown',
+                
+                // Privacy Analysis
+                isPrivacyProtected: data.privacyAnalysis?.isPrivate || false,
+                privacyService: data.privacyAnalysis?.privacyService || null,
+                privacyDomain: data.privacyAnalysis?.privacyDomain || null,
+                privacyDomainWhois: data.privacyAnalysis?.privacyDomainWhois || null,
+                
+                // Contact & Infrastructure
+                emails: data.whoisData?.emails || [],
+                nameServers: data.dnsData?.NS || [],
+                primaryIP: data.dnsData?.A?.[0] || null,
+                geoLocation: data.geoData?.primaryLocation || null,
+                
+                // Quick Assessment
+                quickAssessment: data.summary?.quickAssessment || {},
+                
+                // Full data for exports
+                rawData: data
+            };
+        }
+
+        // ===== DISPLAY FUNCTIONS =====
+        function updateQuickSummary() {
+            if (analysisData.length === 0) return;
+            
+            const stats = {
+                usRegistrars: analysisData.filter(a => a.isUSRegistrar && !a.error).length,
+                privacyProtected: analysisData.filter(a => a.isPrivacyProtected && !a.error).length,
+                highPriority: analysisData.filter(a => a.quickAssessment?.priority === 'high' && !a.error).length,
+                totalTime: analysisData.reduce((sum, a) => sum + (a.processingTime || 0), 0)
+            };
+            
+            document.getElementById('usRegistrarCount').textContent = stats.usRegistrars;
+            document.getElementById('privacyProtectedCount').textContent = stats.privacyProtected;
+            document.getElementById('highPriorityCount').textContent = stats.highPriority;
+            document.getElementById('totalProcessingTime').textContent = stats.totalTime;
+            document.getElementById('quickSummary').style.display = 'block';
+        }
+
+        function displayResults() {
+            if (analysisData.length === 0) return;
+            
+            let resultsHtml = '';
+            
+            analysisData.forEach((analysis, index) => {
+                resultsHtml += generateDomainCard(analysis, index);
+            });
+            
+            // Add export section
+            if (analysisData.filter(a => !a.error).length > 0) {
+                resultsHtml += generateExportSection();
+            }
+            
+            document.getElementById('analysisResults').innerHTML = resultsHtml;
+        }
+
+        function generateDomainCard(analysis) {
+            if (analysis.error) {
+                return `
+                    <div class="card analysis-card mb-4">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-exclamation-triangle"></i> ${analysis.domain} - Analysis Failed
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-danger mb-0">
+                                <strong>Error:</strong> ${analysis.error}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const priorityClass = analysis.quickAssessment?.priority === 'high' ? 'priority-high' : 'priority-normal';
+            
+            const privacyBadge = analysis.isPrivacyProtected 
+                ? `<span class="privacy-badge privacy-protected"><i class="bi bi-shield-check"></i> Privacy Protected</span>`
+                : `<span class="privacy-badge privacy-public"><i class="bi bi-eye"></i> Public Registration</span>`;
+            
+            const registrarBadge = analysis.isUSRegistrar 
+                ? `<span class="privacy-badge us-registrar"><i class="bi bi-flag-usa"></i> US Registrar</span>`
+                : `<span class="privacy-badge non-us-registrar"><i class="bi bi-globe"></i> Non-US Registrar</span>`;
+            
+            // Generate workflow recommendation
+            let workflowAlert = '';
+            if (analysis.quickAssessment?.recommendation) {
+                const alertClass = analysis.quickAssessment.priority === 'high' ? 'alert-warning' : 'alert-info';
+                workflowAlert = `
+                    <div class="alert ${alertClass} workflow-alert mb-3">
+                        <i class="bi bi-lightbulb"></i> <strong>Workflow Recommendation:</strong><br>
+                        ${analysis.quickAssessment.recommendation}
+                        ${analysis.privacyDomain ? `<br><small class="text-muted">Privacy domain to check: <code>${analysis.privacyDomain}</code></small>` : ''}
+                    </div>
+                `;
+            }
+            
+            // Generate flags
+            let flagsHtml = '';
+            if (analysis.quickAssessment?.flags) {
+                flagsHtml = `
+                    <div class="mb-2">
+                        ${analysis.quickAssessment.flags.map(flag => {
+                            const flagColors = {
+                                'US_REGISTRAR': 'bg-info text-dark',
+                                'PRIVACY_PROTECTED': 'bg-warning text-dark',
+                                'CHECK_PRIVACY_DOMAIN': 'bg-danger text-white',
+                                'US_HOSTED': 'bg-success text-white'
+                            };
+                            return `<span class="flag-badge ${flagColors[flag] || 'bg-secondary text-white'}">${flag.replace(/_/g, ' ')}</span>`;
+                        }).join('')}
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="card analysis-card mb-4 ${priorityClass}" style="position: relative;">
+                    ${analysis.fromCache ? '<div class="cache-indicator"><i class="bi bi-lightning"></i> Cached</div>' : ''}
+                    
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h5 class="card-title mb-1">
+                                    <i class="bi bi-globe"></i> ${analysis.domain}
+                                </h5>
+                                <div class="mb-2">
+                                    ${privacyBadge}
+                                    ${registrarBadge}
+                                </div>
+                                ${flagsHtml}
+                            </div>
+                            <div class="text-end">
+                                <div class="small text-muted">
+                                    <i class="bi bi-stopwatch"></i> ${analysis.processingTime}ms
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        ${workflowAlert}
+                        
+                        <div class="row">
+                            <!-- Registration Details -->
+                            <div class="col-lg-4 mb-3">
+                                <h6><i class="bi bi-building"></i> Registration Details</h6>
+                                <table class="table table-sm table-borderless">
+                                    <tr><td><strong>Registrar:</strong></td><td>${analysis.registrar}</td></tr>
+                                    <tr><td><strong>Category:</strong></td><td>${analysis.registrarCategory}</td></tr>
+                                    <tr><td><strong>Created:</strong></td><td>${analysis.creationDate}</td></tr>
+                                    <tr><td><strong>Expires:</strong></td><td>${analysis.expirationDate}</td></tr>
+                                    <tr><td><strong>Status:</strong></td><td>${analysis.status}</td></tr>
+                                    <tr><td><strong>Country:</strong></td><td>${analysis.country}</td></tr>
+                                </table>
+                            </div>
+                            
+                            <!-- Contact Information -->
+                            <div class="col-lg-4 mb-3">
+                                <h6><i class="bi bi-envelope"></i> Contact Information</h6>
+                                ${analysis.isPrivacyProtected ? 
+                                    `<div class="alert alert-info py-2 mb-2">
+                                        <small><strong>Privacy Service:</strong> ${analysis.privacyService || 'Unknown'}</small>
+                                        ${analysis.privacyDomain ? `<br><small><strong>Privacy Domain:</strong> <code>${analysis.privacyDomain}</code></small>` : ''}
+                                    </div>` : ''
+                                }
+                                ${analysis.emails.length > 0 ? 
+                                    `<div class="small">${analysis.emails.slice(0, 5).map(email => 
+                                        `<div class="mb-1"><code>${email}</code></div>`
+                                    ).join('')}${analysis.emails.length > 5 ? `<small class="text-muted">... and ${analysis.emails.length - 5} more</small>` : ''}</div>` : 
+                                    '<div class="text-muted small">No emails found</div>'
+                                }
+                            </div>
+                            
+                            <!-- Infrastructure -->
+                            <div class="col-lg-4 mb-3">
+                                <h6><i class="bi bi-hdd-network"></i> Infrastructure</h6>
+                                ${analysis.primaryIP ? `<div class="mb-2"><strong>Primary IP:</strong> <code>${analysis.primaryIP}</code></div>` : ''}
+                                ${analysis.geoLocation ? 
+                                    `<div class="mb-2"><strong>Location:</strong> ${analysis.geoLocation.city}, ${analysis.geoLocation.country}</div>` : ''
+                                }
+                                <div><strong>Name Servers:</strong> (${analysis.nameServers.length})</div>
+                                ${analysis.nameServers.length > 0 ? 
+                                    `<div class="small">${analysis.nameServers.slice(0, 4).map(ns => 
+                                        `<div><code>${ns}</code></div>`
+                                    ).join('')}${analysis.nameServers.length > 4 ? `<small class="text-muted">... and ${analysis.nameServers.length - 4} more</small>` : ''}</div>` : 
+                                    '<div class="text-muted small">No name servers found</div>'
+                                }
+                            </div>
+                        </div>
+                        
+                        <!-- Privacy Domain Analysis -->
+                        ${analysis.privacyDomainWhois ? `
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="alert alert-secondary">
+                                        <h6><i class="bi bi-shield-exclamation"></i> Privacy Domain Analysis: <code>${analysis.privacyDomain}</code></h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <strong>Privacy Registrar:</strong> ${analysis.privacyDomainWhois.registrar || 'Unknown'}<br>
+                                                <strong>Privacy Created:</strong> ${analysis.privacyDomainWhois.creationDate || 'Unknown'}
+                                            </div>
+                                            <div class="col-md-6">
+                                                <strong>Privacy Country:</strong> ${analysis.privacyDomainWhois.registrantCountry || 'Unknown'}<br>
+                                                <strong>Privacy Emails:</strong> ${analysis.privacyDomainWhois.emails?.length || 0}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function generateExportSection() {
+            return `
+                <div class="export-section">
+                    <div class="text-center">
+                        <h4 class="mb-3"><i class="bi bi-download"></i> Export Analysis Reports</h4>
+                        <p class="text-muted mb-4">Generate professional reports for legal documentation and case files</p>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <button class="btn btn-success w-100" onclick="exportDetailedReport()">
+                                    <i class="bi bi-file-text"></i><br>
+                                    Legal Report
+                                    <small class="d-block mt-1">Comprehensive analysis</small>
+                                </button>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-primary w-100" onclick="exportExecutiveSummary()">
+                                    <i class="bi bi-clipboard-data"></i><br>
+                                    Executive Summary
+                                    <small class="d-block mt-1">High-level overview</small>
+                                </button>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-info w-100" onclick="exportRawData()">
+                                    <i class="bi bi-database"></i><br>
+                                    Raw Data (JSON)
+                                    <small class="d-block mt-1">Complete dataset</small>
+                                </button>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-warning w-100" onclick="exportSpreadsheet()">
+                                    <i class="bi bi-file-spreadsheet"></i><br>
+                                    Spreadsheet
+                                    <small class="d-block mt-1">CSV format</small>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ===== EXPORT FUNCTIONS =====
+        function exportDetailedReport() {
+            const validData = analysisData.filter(a => !a.error);
+            let report = `DOMAIN INTELLIGENCE ANALYSIS REPORT\n`;
+            report += `${'='.repeat(60)}\n\n`;
+            report += `Generated: ${new Date().toLocaleString()}\n`;
+            report += `Total Domains Analyzed: ${validData.length}\n`;
+            report += `US Registrars: ${validData.filter(a => a.isUSRegistrar).length}\n`;
+            report += `Privacy Protected: ${validData.filter(a => a.isPrivacyProtected).length}\n`;
+            report += `High Priority Cases: ${validData.filter(a => a.quickAssessment?.priority === 'high').length}\n\n`;
+            
+            validData.forEach((analysis, index) => {
+                report += `${index + 1}. DOMAIN: ${analysis.domain.toUpperCase()}\n`;
+                report += `${'='.repeat(40)}\n`;
+                
+                // Registration Information
+                report += `REGISTRATION DETAILS:\n`;
+                report += `  Registrar: ${analysis.registrar}\n`;
+                report += `  Category: ${analysis.registrarCategory}\n`;
+                report += `  US-Based: ${analysis.isUSRegistrar ? 'YES' : 'NO'}\n`;
+                report += `  Created: ${analysis.creationDate}\n`;
+                report += `  Expires: ${analysis.expirationDate}\n`;
+                report += `  Status: ${analysis.status}\n`;
+                report += `  Country: ${analysis.country}\n\n`;
+                
+                // Privacy Analysis
+                report += `PRIVACY ANALYSIS:\n`;
+                report += `  Protected: ${analysis.isPrivacyProtected ? 'YES' : 'NO'}\n`;
+                if (analysis.isPrivacyProtected) {
+                    report += `  Service: ${analysis.privacyService || 'Unknown'}\n`;
+                    if (analysis.privacyDomain) {
+                        report += `  Privacy Domain: ${analysis.privacyDomain}\n`;
+                    }
+                }
+                report += `\n`;
+                
+                // Contact Information
+                if (analysis.emails.length > 0) {
+                    report += `CONTACT EMAILS:\n`;
+                    analysis.emails.forEach(email => {
+                        report += `  ${email}\n`;
+                    });
+                    report += `\n`;
+                }
+                
+                // Infrastructure
+                report += `INFRASTRUCTURE:\n`;
+                if (analysis.primaryIP) {
+                    report += `  Primary IP: ${analysis.primaryIP}\n`;
+                }
+                if (analysis.geoLocation) {
+                    report += `  Location: ${analysis.geoLocation.city}, ${analysis.geoLocation.country}\n`;
+                }
+                report += `  Name Servers: ${analysis.nameServers.length}\n`;
+                analysis.nameServers.forEach(ns => {
+                    report += `    ${ns}\n`;
+                });
+                
+                // Workflow Recommendation
+                if (analysis.quickAssessment?.recommendation) {
+                    report += `\nWORKFLOW RECOMMENDATION:\n`;
+                    report += `  Priority: ${analysis.quickAssessment.priority?.toUpperCase() || 'NORMAL'}\n`;
+                    report += `  Action: ${analysis.quickAssessment.recommendation}\n`;
+                    if (analysis.quickAssessment.flags) {
+                        report += `  Flags: ${analysis.quickAssessment.flags.join(', ')}\n`;
+                    }
+                }
+                
+                report += `\n${'='.repeat(60)}\n\n`;
+            });
+            
+            downloadFile(report, `domain_intelligence_report_${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
+        }
+
+        function exportExecutiveSummary() {
+            const validData = analysisData.filter(a => !a.error);
+            let summary = `EXECUTIVE SUMMARY - DOMAIN ANALYSIS\n`;
+            summary += `${'='.repeat(50)}\n\n`;
+            summary += `Analysis Date: ${new Date().toLocaleDateString()}\n`;
+            summary += `Total Domains: ${validData.length}\n\n`;
+            
+            summary += `KEY FINDINGS:\n`;
+            summary += `• US Registrars: ${validData.filter(a => a.isUSRegistrar).length}/${validData.length}\n`;
+            summary += `• Privacy Protected: ${validData.filter(a => a.isPrivacyProtected).length}/${validData.length}\n`;
+            summary += `• High Priority: ${validData.filter(a => a.quickAssessment?.priority === 'high').length}/${validData.length}\n\n`;
+            
+            summary += `DOMAIN SUMMARY:\n`;
+            validData.forEach(analysis => {
+                summary += `${analysis.domain} - ${analysis.registrar} (${analysis.isUSRegistrar ? 'US' : 'Non-US'})`;
+                if (analysis.isPrivacyProtected) summary += ` [PRIVACY]`;
+                if (analysis.quickAssessment?.priority === 'high') summary += ` [HIGH PRIORITY]`;
+                summary += `\n`;
+            });
+            
+            downloadFile(summary, `domain_executive_summary_${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
+        }
+
+        function exportRawData() {
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                totalDomains: analysisData.length,
+                successfulAnalyses: analysisData.filter(a => !a.error).length,
+                analysis: analysisData
+            };
+            
+            const jsonString = JSON.stringify(exportData, null, 2);
+            downloadFile(jsonString, `domain_raw_data_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+        }
+
+        function exportSpreadsheet() {
+            let csv = 'Domain,Registrar,Category,US Registrar,Privacy Protected,Privacy Service,Created,Expires,Status,Country,Primary IP,Location,Name Servers,Emails,Processing Time,Priority,Recommendation\n';
+            
+            analysisData.forEach(analysis => {
+                if (analysis.error) {
+                    csv += `"${analysis.domain}","ERROR","","","","","","","","","","","","","","","${analysis.error}"\n`;
+                    return;
+                }
+                
+                const emails = analysis.emails.join('; ');
+                const nameServers = analysis.nameServers.join('; ');
+                const location = analysis.geoLocation ? `${analysis.geoLocation.city}, ${analysis.geoLocation.country}` : '';
+                
+                csv += `"${analysis.domain}","${analysis.registrar}","${analysis.registrarCategory}","${analysis.isUSRegistrar}","${analysis.isPrivacyProtected}","${analysis.privacyService || ''}","${analysis.creationDate}","${analysis.expirationDate}","${analysis.status}","${analysis.country}","${analysis.primaryIP || ''}","${location}","${nameServers}","${emails}","${analysis.processingTime}","${analysis.quickAssessment?.priority || 'normal'}","${analysis.quickAssessment?.recommendation || ''}"\n`;
+            });
+            
+            downloadFile(csv, `domain_analysis_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
