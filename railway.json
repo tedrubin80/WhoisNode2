@@ -1,0 +1,121 @@
+{
+  "//": "Railway deployment configuration for WHOIS Intelligence Server",
+  "//": "FILE LOCATION: /railway.json (optional - Railway auto-detects Node.js)",
+  
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "npm install"
+  },
+  "deploy": {
+    "startCommand": "npm start",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  },
+  "environments": {
+    "production": {
+      "variables": {
+        "NODE_ENV": "production",
+        "PORT": "$PORT"
+      }
+    }
+  }
+}
+
+// RAILWAY DEPLOYMENT STEPS:
+// ========================
+
+// 1. SETUP RAILWAY PROJECT
+// -------------------------
+// • Go to https://railway.app
+// • Connect your GitHub repository
+// • Railway will auto-detect Node.js and deploy
+
+// 2. ADD POSTGRESQL DATABASE
+// --------------------------
+// • In Railway dashboard, click "New" → "Database" → "PostgreSQL" 
+// • Railway will automatically set DATABASE_URL environment variable
+// • Your DATABASE_URL will be: postgresql://postgres:password@postgres.switchback.proxy.rlwy.net:5432/railway
+
+// 3. CONFIGURE ENVIRONMENT VARIABLES
+// ----------------------------------
+// In Railway dashboard, add these environment variables:
+
+/*
+REQUIRED VARIABLES:
+==================
+NODE_ENV=production
+API_KEY=your_secure_api_key_here
+JWT_SECRET=your_super_secure_jwt_secret_here
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_secure_admin_password
+
+RECOMMENDED FOR ENHANCED FEATURES:
+==================================
+VIRUSTOTAL_API_KEY=your_virustotal_api_key
+ABUSEIPDB_API_KEY=your_abuseipdb_api_key
+OPENAI_API_KEY=your_openai_api_key
+WHOISJSON_API_KEY=your_whoisjson_api_key
+
+OPTIONAL SECURITY:
+==================
+ALLOWED_ORIGINS=https://your-railway-domain.up.railway.app
+*/
+
+// 4. DEPLOYMENT COMMANDS
+// ----------------------
+// Manual deployment via Railway CLI:
+/*
+npm install -g @railway/cli
+railway login
+railway link
+railway up
+*/
+
+// 5. HEALTH CHECK ENDPOINTS
+// -------------------------
+// After deployment, test these endpoints:
+/*
+GET  https://your-app.up.railway.app/health
+GET  https://your-app.up.railway.app/api/status (requires API key)
+POST https://your-app.up.railway.app/api/analyze (requires API key)
+*/
+
+// 6. DATABASE MIGRATIONS
+// ----------------------
+// Migrations will run automatically on first startup
+// Check logs in Railway dashboard to confirm:
+/*
+✅ PostgreSQL connected successfully to Railway
+🔄 Running database migrations...
+✅ Migration completed: 001_create_users.sql
+✅ Migration completed: 002_create_analyses.sql
+✅ All migrations completed successfully
+*/
+
+// 7. MONITORING & LOGS
+// --------------------
+// • Use Railway dashboard to monitor:
+//   - Application logs
+//   - Database metrics  
+//   - Memory/CPU usage
+//   - Request metrics
+
+// 8. CUSTOM DOMAIN (OPTIONAL)
+// ---------------------------
+// • In Railway dashboard: Settings → Domains
+// • Add your custom domain
+// • Update ALLOWED_ORIGINS environment variable
+
+// 9. SCALING (IF NEEDED)
+// ----------------------
+// Railway automatically scales based on usage
+// For high-traffic scenarios:
+// • Monitor response times
+// • Consider Redis addon for enhanced caching
+// • Upgrade PostgreSQL plan if needed
+
+// 10. BACKUP STRATEGY
+// -------------------
+// • Railway PostgreSQL includes automatic backups
+// • Export important data periodically
+// • Consider setting up database replication for production

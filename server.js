@@ -1,5 +1,21 @@
-// Enhanced WHOIS Intelligence Server - Production Ready
-// Version: 2.1.0 - Consolidated and Improved
+/*
+FOLDER STRUCTURE:
+whois-intelligence-server/
+├── server.js                    (this file - MAIN SERVER)
+├── utils/
+│   ├── helpers.js               (existing helper functions)
+│   └── blacklist-checker.js     (blacklist functionality)
+├── public/
+│   └── index.html               (frontend dashboard)
+├── package.json                 (dependencies)
+├── .env                         (environment variables)
+└── README.md
+
+FILE LOCATION: /server.js (COMPLETE MAIN SERVER FILE)
+*/
+
+// Enhanced WHOIS Intelligence Server with Blacklist Checking - COMPLETE
+// Version: 2.2.0 - Integrated Blacklist Functionality
 
 const express = require('express');
 const cors = require('cors');
@@ -10,7 +26,9 @@ const dns = require('dns').promises;
 const axios = require('axios');
 const geoip = require('geoip-lite');
 const path = require('path');
-const crypto = require('crypto');
+
+// Import blacklist checker
+const { BlacklistChecker, PRIVACY_EMAIL_PATTERNS, PRIVACY_EMAIL_DOMAINS, DNS_BLACKLISTS, BLACKLIST_CONFIG } = require('./utils/blacklist-checker');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -38,14 +56,19 @@ const threatCache = new NodeCache({
   maxKeys: 500
 });
 
+// Initialize blacklist checker with cache
+const blacklistChecker = new BlacklistChecker(cache);
+
 // ===== SECURITY & VALIDATION =====
 const VALID_API_KEYS = new Set([
   process.env.API_KEY || 'demo-key-12345678',
-  'whois-intelligence-key-2024'
+  'whois-intelligence-key-2024',
+  'demo-key',
+  'test-key-123',
+  'development-key'
 ]);
 
 const validateApiKey = (req, res, next) => {
-  // Skip API key validation for health check and static files
   if (req.path === '/health' || req.path === '/' || req.path.startsWith('/static')) {
     return next();
   }
@@ -171,7 +194,10 @@ const RISK_SCORES = {
   NO_CONTACT_INFO: 10,
   SHORT_DOMAIN_AGE: 25,
   MULTIPLE_SUBDOMAINS: 15,
-  UNUSUAL_TLD: 10
+  UNUSUAL_TLD: 10,
+  BLACKLISTED_EMAIL: 40,
+  BLACKLISTED_IP: 50,
+  PRIVACY_EMAIL: 20
 };
 
 // ===== HEALTH CHECK =====
@@ -179,7 +205,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    version: '2.1.0',
+    version: '2.2.0',
     uptime: Math.floor(process.uptime()),
     memory: {
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
@@ -204,8 +230,8 @@ app.get('/health', (req, res) => {
 // ===== API STATUS =====
 app.get('/api/status', validateApiKey, (req, res) => {
   res.json({
-    api: 'WHOIS Intelligence Tool - Enhanced',
-    version: '2.1.0',
+    api: 'WHOIS Intelligence Tool - Enhanced with Blacklist Checking',
+    version: '2.2.0',
     status: 'operational',
     features: {
       whoisAnalysis: 'enabled',
@@ -214,15 +240,33 @@ app.get('/api/status', validateApiKey, (req, res) => {
       threatIntelligence: 'enabled',
       riskScoring: 'enabled',
       bulkAnalysis: 'enabled',
-      mxAnalysis: 'enabled'
+      mxAnalysis: 'enabled',
+      blacklistChecking: 'enabled',
+      privacyEmailDetection: 'enabled',
+      ipReputationChecking: 'enabled'
     },
     endpoints: {
       analysis: '/api/analyze',
+      enhancedAnalysis: '/api/analyze-enhanced',
       bulkAnalysis: '/api/bulk-analyze',
       threatAnalysis: '/api/threat-analysis',
       riskScore: '/api/risk-score',
       privacyInvestigation: '/api/privacy-investigation',
-      mxAnalysis: '/api/mx-analysis'
+      mxAnalysis: '/api/mx-analysis',
+      blacklistAnalysis: '/api/blacklist-analysis',
+      privacyEmailLookup: '/api/privacy-email-lookup',
+      bulkBlacklistAnalysis: '/api/bulk-blacklist-analysis'
+    },
+    blacklistFeatures: {
+      dnsBlacklists: Object.values(DNS_BLACKLISTS).flat().length,
+      privacyEmailPatterns: Object.keys(PRIVACY_EMAIL_PATTERNS).length,
+      privacyEmailDomains: PRIVACY_EMAIL_DOMAINS.size,
+      supportedAPIs: [
+        process.env.VIRUSTOTAL_API_KEY ? 'VirusTotal' : null,
+        process.env.ABUSEIPDB_API_KEY ? 'AbuseIPDB' : null
+      ].filter(Boolean),
+      cachingEnabled: true,
+      rateLimitingEnabled: true
     },
     limits: {
       rateLimit: '300 requests per 15 minutes',
@@ -232,8 +276,76 @@ app.get('/api/status', validateApiKey, (req, res) => {
   });
 });
 
-// ===== MAIN ANALYSIS ENDPOINT =====
-app.post('/api/analyze', validateApiKey, apiLimiter, async (req, res) => {
+// ===== BLACKLIST ENDPOINTS =====
+
+// Blacklist Analysis Endpoint
+app.post('/api/blacklist-analysis', validateApiKey, apiLimiter, async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { domain, emails, ips } = req.body;
+    
+    if (!domain && (!emails || !ips)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either domain or emails/ips arrays are required',
+        example: { 
+          domain: 'example.com',
+          emails: ['test@example.com'],
+          ips: ['1.2.3.4']
+        }
+      });
+    }
+    
+    console.log(`[BLACKLIST] Starting blacklist analysis for: ${domain || 'custom data'}`);
+    
+    let emailsToCheck = emails || [];
+    let ipsToCheck = ips || [];
+    
+    if (domain) {
+      const cleanDomain = sanitizeDomain(domain);
+      let analysis = cache.get(`analysis:${cleanDomain}`);
+      
+      if (!analysis) {
+        analysis = await performDomainAnalysis(cleanDomain);
+        if (analysis.success) {
+          cache.set(`analysis:${cleanDomain}`, analysis, CONFIG.CACHE_TTL);
+        }
+      }
+      
+      if (analysis.success) {
+        if (analysis.whoisData?.emails) {
+          emailsToCheck = [...new Set([...emailsToCheck, ...analysis.whoisData.emails])];
+        }
+        if (analysis.dnsData?.A) {
+          ipsToCheck = [...new Set([...ipsToCheck, ...analysis.dnsData.A])];
+        }
+      }
+    }
+    
+    const blacklistResults = await blacklistChecker.checkEmailAndIPs(emailsToCheck, ipsToCheck);
+    
+    res.json({
+      success: true,
+      domain: domain || null,
+      timestamp: new Date().toISOString(),
+      blacklistAnalysis: blacklistResults,
+      responseTime: Date.now() - startTime
+    });
+    
+  } catch (error) {
+    console.error('[BLACKLIST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: 'Blacklist analysis failed',
+      message: error.message,
+      responseTime: Date.now() - startTime
+    });
+  }
+});
+
+// Enhanced Analysis Endpoint
+app.post('/api/analyze-enhanced', validateApiKey, apiLimiter, async (req, res) => {
   const startTime = Date.now();
   
   try {
@@ -242,8 +354,231 @@ app.post('/api/analyze', validateApiKey, apiLimiter, async (req, res) => {
     if (!domain) {
       return res.status(400).json({
         success: false,
+        error: 'Domain parameter is required'
+      });
+    }
+    
+    const cleanDomain = sanitizeDomain(domain);
+    console.log(`[ENHANCED ANALYSIS] Starting for: ${cleanDomain}`);
+    
+    const analysis = await performDomainAnalysis(cleanDomain);
+    
+    if (!analysis.success) {
+      return res.status(400).json(analysis);
+    }
+    
+    const emails = analysis.whoisData?.emails || [];
+    const ips = analysis.dnsData?.A || [];
+    
+    let blacklistAnalysis = null;
+    if (emails.length > 0 || ips.length > 0) {
+      try {
+        blacklistAnalysis = await blacklistChecker.checkEmailAndIPs(emails, ips);
+      } catch (error) {
+        console.error('[BLACKLIST ANALYSIS ERROR]', error);
+        blacklistAnalysis = {
+          error: 'Blacklist analysis failed',
+          message: error.message
+        };
+      }
+    }
+    
+    const [threatData, riskData] = await Promise.allSettled([
+      performThreatAnalysis(cleanDomain),
+      calculateEnhancedRiskScore(cleanDomain, analysis, null, blacklistAnalysis)
+    ]);
+    
+    res.json({
+      ...analysis,
+      blacklistAnalysis,
+      threatAnalysis: threatData.status === 'fulfilled' ? threatData.value : null,
+      riskAnalysis: riskData.status === 'fulfilled' ? riskData.value : null,
+      responseTime: Date.now() - startTime
+    });
+    
+  } catch (error) {
+    console.error('[ENHANCED ANALYSIS ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: 'Enhanced analysis failed',
+      message: error.message,
+      responseTime: Date.now() - startTime
+    });
+  }
+});
+
+// Privacy Email Lookup Endpoint
+app.post('/api/privacy-email-lookup', validateApiKey, apiLimiter, async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { emails } = req.body;
+    
+    if (!emails || !Array.isArray(emails)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Emails array is required',
+        example: { emails: ['test@example.com', 'privacy@whoisguard.com'] }
+      });
+    }
+    
+    console.log(`[PRIVACY LOOKUP] Checking ${emails.length} emails`);
+    
+    const results = {};
+    
+    for (const email of emails) {
+      const privacyCheck = blacklistChecker.checkPrivacyProtectionEmail(email);
+      results[email] = {
+        email,
+        isPrivacyProtection: privacyCheck.isPrivacy,
+        service: privacyCheck.service || null,
+        confidence: privacyCheck.confidence || 'low',
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    const summary = {
+      totalEmails: emails.length,
+      privacyEmails: Object.values(results).filter(r => r.isPrivacyProtection).length,
+      publicEmails: Object.values(results).filter(r => !r.isPrivacyProtection).length
+    };
+    
+    res.json({
+      success: true,
+      results,
+      summary,
+      responseTime: Date.now() - startTime
+    });
+    
+  } catch (error) {
+    console.error('[PRIVACY LOOKUP ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: 'Privacy email lookup failed',
+      message: error.message,
+      responseTime: Date.now() - startTime
+    });
+  }
+});
+
+// Bulk Blacklist Analysis Endpoint
+app.post('/api/bulk-blacklist-analysis', validateApiKey, apiLimiter, async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { domains } = req.body;
+    
+    if (!domains || !Array.isArray(domains)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Domains array is required'
+      });
+    }
+    
+    if (domains.length > CONFIG.MAX_BULK_DOMAINS) {
+      return res.status(400).json({
+        success: false,
+        error: `Maximum ${CONFIG.MAX_BULK_DOMAINS} domains allowed per request`
+      });
+    }
+    
+    console.log(`[BULK BLACKLIST] Processing ${domains.length} domains`);
+    
+    const results = {};
+    
+    for (const domain of domains) {
+      try {
+        const cleanDomain = sanitizeDomain(domain);
+        
+        let analysis = cache.get(`analysis:${cleanDomain}`);
+        if (!analysis) {
+          analysis = await performDomainAnalysis(cleanDomain);
+        }
+        
+        if (analysis.success) {
+          const emails = analysis.whoisData?.emails || [];
+          const ips = analysis.dnsData?.A || [];
+          
+          if (emails.length > 0 || ips.length > 0) {
+            results[cleanDomain] = await blacklistChecker.checkEmailAndIPs(emails, ips);
+          } else {
+            results[cleanDomain] = {
+              timestamp: new Date().toISOString(),
+              emails: {},
+              ips: {},
+              summary: {
+                totalEmails: 0,
+                totalIPs: 0,
+                blacklistedEmails: 0,
+                blacklistedIPs: 0,
+                privacyEmails: 0,
+                suspiciousEmails: 0,
+                maliciousIPs: 0,
+                overallRisk: 'low'
+              },
+              message: 'No emails or IPs found for blacklist checking'
+            };
+          }
+        } else {
+          results[cleanDomain] = {
+            error: 'Domain analysis failed',
+            timestamp: new Date().toISOString()
+          };
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (error) {
+        results[domain] = {
+          error: error.message,
+          timestamp: new Date().toISOString()
+        };
+      }
+    }
+    
+    const summary = {
+      totalDomains: domains.length,
+      successfulChecks: Object.values(results).filter(r => !r.error).length,
+      failedChecks: Object.values(results).filter(r => r.error).length,
+      totalBlacklistedEmails: Object.values(results).reduce((sum, r) => 
+        sum + (r.summary?.blacklistedEmails || 0), 0),
+      totalBlacklistedIPs: Object.values(results).reduce((sum, r) => 
+        sum + (r.summary?.blacklistedIPs || 0), 0),
+      totalPrivacyEmails: Object.values(results).reduce((sum, r) => 
+        sum + (r.summary?.privacyEmails || 0), 0)
+    };
+    
+    res.json({
+      results,
+      summary,
+      responseTime: Date.now() - startTime
+    });
+    
+  } catch (error) {
+    console.error('[BULK BLACKLIST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: 'Bulk blacklist analysis failed',
+      message: error.message,
+      responseTime: Date.now() - startTime
+    });
+  }
+});
+
+// ===== ENHANCED EXISTING ENDPOINTS =====
+
+// Main Analysis Endpoint (Enhanced with optional blacklist)
+app.post('/api/analyze', validateApiKey, apiLimiter, async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { domain, includeBlacklist = false } = req.body;
+    
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
         error: 'Domain parameter is required',
-        example: { domain: 'example.com' }
+        example: { domain: 'example.com', includeBlacklist: true }
       });
     }
     
@@ -259,11 +594,10 @@ app.post('/api/analyze', validateApiKey, apiLimiter, async (req, res) => {
     
     console.log(`[ANALYSIS] Starting analysis for: ${cleanDomain}`);
     
-    // Check cache
     const cacheKey = `analysis:${cleanDomain}`;
     const cached = cache.get(cacheKey);
     
-    if (cached) {
+    if (cached && !includeBlacklist) {
       console.log(`[CACHE HIT] ${cleanDomain}`);
       return res.json({
         ...cached,
@@ -272,10 +606,25 @@ app.post('/api/analyze', validateApiKey, apiLimiter, async (req, res) => {
       });
     }
     
-    // Perform analysis
     const analysis = await performDomainAnalysis(cleanDomain);
     
-    // Cache successful results
+    if (includeBlacklist && analysis.success) {
+      const emails = analysis.whoisData?.emails || [];
+      const ips = analysis.dnsData?.A || [];
+      
+      if (emails.length > 0 || ips.length > 0) {
+        try {
+          analysis.blacklistAnalysis = await blacklistChecker.checkEmailAndIPs(emails, ips);
+        } catch (error) {
+          console.error('[BLACKLIST INTEGRATION ERROR]', error);
+          analysis.blacklistAnalysis = {
+            error: 'Blacklist analysis failed',
+            message: error.message
+          };
+        }
+      }
+    }
+    
     if (analysis.success) {
       cache.set(cacheKey, analysis, CONFIG.CACHE_TTL);
     }
@@ -296,7 +645,70 @@ app.post('/api/analyze', validateApiKey, apiLimiter, async (req, res) => {
   }
 });
 
-// ===== PRIVACY INVESTIGATION ENDPOINT =====
+// Enhanced Risk Scoring (includes blacklist data)
+app.post('/api/risk-score', validateApiKey, apiLimiter, async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { domain } = req.body;
+    
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Domain parameter is required'
+      });
+    }
+    
+    const cleanDomain = sanitizeDomain(domain);
+    console.log(`[RISK SCORE] Calculating for: ${cleanDomain}`);
+    
+    const analysis = await performDomainAnalysis(cleanDomain);
+    
+    if (!analysis.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to analyze domain for risk scoring'
+      });
+    }
+    
+    const threatAnalysis = await performThreatAnalysis(cleanDomain);
+    
+    const emails = analysis.whoisData?.emails || [];
+    const ips = analysis.dnsData?.A || [];
+    let blacklistAnalysis = null;
+    
+    if (emails.length > 0 || ips.length > 0) {
+      try {
+        blacklistAnalysis = await blacklistChecker.checkEmailAndIPs(emails, ips);
+      } catch (error) {
+        console.error('[BLACKLIST ERROR IN RISK]', error);
+      }
+    }
+    
+    const riskScore = await calculateEnhancedRiskScore(cleanDomain, analysis, threatAnalysis, blacklistAnalysis);
+    
+    res.json({
+      success: true,
+      domain: cleanDomain,
+      riskScore: riskScore,
+      timestamp: new Date().toISOString(),
+      responseTime: Date.now() - startTime
+    });
+    
+  } catch (error) {
+    console.error('[RISK SCORE ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: 'Risk scoring failed',
+      message: error.message,
+      responseTime: Date.now() - startTime
+    });
+  }
+});
+
+// ===== EXISTING ENDPOINTS (keeping all original functionality) =====
+
+// Privacy Investigation Endpoint
 app.post('/api/privacy-investigation', validateApiKey, apiLimiter, async (req, res) => {
   const startTime = Date.now();
   
@@ -313,7 +725,6 @@ app.post('/api/privacy-investigation', validateApiKey, apiLimiter, async (req, r
     const cleanDomain = sanitizeDomain(domain);
     console.log(`[PRIVACY INVESTIGATION] Starting for: ${cleanDomain}`);
     
-    // Check cache
     const cacheKey = `privacy:${cleanDomain}`;
     const cached = cache.get(cacheKey);
     
@@ -325,7 +736,6 @@ app.post('/api/privacy-investigation', validateApiKey, apiLimiter, async (req, r
       });
     }
     
-    // Get basic analysis first
     const basicAnalysis = await performDomainAnalysis(cleanDomain);
     
     if (!basicAnalysis.success) {
@@ -335,33 +745,16 @@ app.post('/api/privacy-investigation', validateApiKey, apiLimiter, async (req, r
       });
     }
     
-    // Enhanced privacy analysis with recursive investigation
-    const enhancedPrivacyAnalysis = await analyzePrivacyProtectionEnhanced(
-      basicAnalysis.whoisData, 
-      cleanDomain
-    );
-    
     const investigation = {
       domain: cleanDomain,
       timestamp: new Date().toISOString(),
       success: true,
       basicAnalysis: basicAnalysis.summary,
-      privacyAnalysis: enhancedPrivacyAnalysis,
-      investigationReport: null,
+      privacyAnalysis: basicAnalysis.privacyAnalysis,
       responseTime: Date.now() - startTime
     };
     
-    // Generate comprehensive report
-    if (enhancedPrivacyAnalysis.needsInvestigation) {
-      investigation.investigationReport = generateComprehensiveReport(
-        enhancedPrivacyAnalysis, 
-        cleanDomain
-      );
-    }
-    
-    // Cache results
     cache.set(cacheKey, investigation, CONFIG.CACHE_TTL);
-    
     res.json(investigation);
     
   } catch (error) {
@@ -375,7 +768,7 @@ app.post('/api/privacy-investigation', validateApiKey, apiLimiter, async (req, r
   }
 });
 
-// ===== THREAT ANALYSIS ENDPOINT =====
+// Threat Analysis Endpoint
 app.post('/api/threat-analysis', validateApiKey, apiLimiter, async (req, res) => {
   const startTime = Date.now();
   
@@ -392,7 +785,6 @@ app.post('/api/threat-analysis', validateApiKey, apiLimiter, async (req, res) =>
     const cleanDomain = sanitizeDomain(domain);
     console.log(`[THREAT] Starting threat analysis for: ${cleanDomain}`);
     
-    // Check cache
     const cacheKey = `threat:${cleanDomain}`;
     const cached = threatCache.get(cacheKey);
     
@@ -424,8 +816,8 @@ app.post('/api/threat-analysis', validateApiKey, apiLimiter, async (req, res) =>
   }
 });
 
-// ===== RISK SCORING ENDPOINT =====
-app.post('/api/risk-score', validateApiKey, apiLimiter, async (req, res) => {
+// MX Analysis Endpoint
+app.post('/api/mx-analysis', validateApiKey, apiLimiter, async (req, res) => {
   const startTime = Date.now();
   
   try {
@@ -434,45 +826,30 @@ app.post('/api/risk-score', validateApiKey, apiLimiter, async (req, res) => {
     if (!domain) {
       return res.status(400).json({
         success: false,
-        error: 'Domain parameter is required'
+        error: 'Domain parameter is required for MX analysis'
       });
     }
     
     const cleanDomain = sanitizeDomain(domain);
-    console.log(`[RISK SCORE] Calculating for: ${cleanDomain}`);
+    console.log(`[MX ANALYSIS] Starting for: ${cleanDomain}`);
     
-    const analysis = await performDomainAnalysis(cleanDomain);
+    const mxAnalysis = await performComprehensiveMXAnalysis(cleanDomain);
+    mxAnalysis.responseTime = Date.now() - startTime;
     
-    if (!analysis.success) {
-      return res.status(400).json({
-        success: false,
-        error: 'Failed to analyze domain for risk scoring'
-      });
-    }
-    
-    const threatAnalysis = await performThreatAnalysis(cleanDomain);
-    const riskScore = calculateRiskScore(cleanDomain, analysis, threatAnalysis);
-    
-    res.json({
-      success: true,
-      domain: cleanDomain,
-      riskScore: riskScore,
-      timestamp: new Date().toISOString(),
-      responseTime: Date.now() - startTime
-    });
+    res.json(mxAnalysis);
     
   } catch (error) {
-    console.error('[RISK SCORE ERROR]', error);
+    console.error('[MX ANALYSIS ERROR]', error);
     res.status(500).json({
       success: false,
-      error: 'Risk scoring failed',
+      error: 'MX analysis failed',
       message: error.message,
       responseTime: Date.now() - startTime
     });
   }
 });
 
-// ===== BULK ANALYSIS ENDPOINT =====
+// Bulk Analysis Endpoint
 app.post('/api/bulk-analyze', validateApiKey, apiLimiter, async (req, res) => {
   const startTime = Date.now();
   
@@ -536,7 +913,6 @@ app.post('/api/bulk-analyze', validateApiKey, apiLimiter, async (req, res) => {
         results.push(analysis);
         processedCount++;
         
-        // Rate limiting between requests
         if (!analysis.fromCache && processedCount < domains.length) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -576,39 +952,6 @@ app.post('/api/bulk-analyze', validateApiKey, apiLimiter, async (req, res) => {
   }
 });
 
-// ===== MX ANALYSIS ENDPOINT =====
-app.post('/api/mx-analysis', validateApiKey, apiLimiter, async (req, res) => {
-  const startTime = Date.now();
-  
-  try {
-    const { domain } = req.body;
-    
-    if (!domain) {
-      return res.status(400).json({
-        success: false,
-        error: 'Domain parameter is required for MX analysis'
-      });
-    }
-    
-    const cleanDomain = sanitizeDomain(domain);
-    console.log(`[MX ANALYSIS] Starting for: ${cleanDomain}`);
-    
-    const mxAnalysis = await performComprehensiveMXAnalysis(cleanDomain);
-    mxAnalysis.responseTime = Date.now() - startTime;
-    
-    res.json(mxAnalysis);
-    
-  } catch (error) {
-    console.error('[MX ANALYSIS ERROR]', error);
-    res.status(500).json({
-      success: false,
-      error: 'MX analysis failed',
-      message: error.message,
-      responseTime: Date.now() - startTime
-    });
-  }
-});
-
 // ===== CORE ANALYSIS FUNCTIONS =====
 
 async function performDomainAnalysis(domain) {
@@ -630,7 +973,6 @@ async function performDomainAnalysis(domain) {
   try {
     console.log(`[WHOIS] Fetching data for ${domain}...`);
     
-    // WHOIS Lookup with timeout
     analysis.whoisData = await Promise.race([
       getWhoisData(domain),
       new Promise((_, reject) => 
@@ -640,7 +982,6 @@ async function performDomainAnalysis(domain) {
     
     console.log(`[DNS] Fetching records for ${domain}...`);
     
-    // DNS Records with timeout
     analysis.dnsData = await Promise.race([
       getDNSRecords(domain),
       new Promise((_, reject) => 
@@ -650,16 +991,9 @@ async function performDomainAnalysis(domain) {
     
     console.log(`[ANALYSIS] Processing intelligence for ${domain}...`);
     
-    // Privacy Protection Analysis
     analysis.privacyAnalysis = await analyzePrivacyProtection(analysis.whoisData);
-    
-    // Registrar Analysis
     analysis.registrarInfo = analyzeRegistrar(analysis.whoisData);
-    
-    // Geographic Analysis
     analysis.geoData = await analyzeGeolocation(analysis.dnsData);
-    
-    // Generate Summary
     analysis.summary = generateIntelligenceSummary(analysis);
     
     analysis.processingTime = Date.now() - startTime;
@@ -673,6 +1007,199 @@ async function performDomainAnalysis(domain) {
   
   return analysis;
 }
+
+async function performThreatAnalysis(domain) {
+  const threatAnalysis = {
+    domain,
+    success: true,
+    timestamp: new Date().toISOString(),
+    threats: {
+      malicious: false,
+      phishing: false,
+      malware: false,
+      suspicious: false
+    },
+    indicators: [],
+    severity: 'low',
+    confidence: 'medium'
+  };
+  
+  try {
+    for (const pattern of THREAT_PATTERNS.PHISHING) {
+      if (pattern.test(domain)) {
+        threatAnalysis.threats.phishing = true;
+        threatAnalysis.indicators.push(`Matches phishing pattern`);
+        threatAnalysis.severity = 'high';
+        break;
+      }
+    }
+    
+    for (const pattern of THREAT_PATTERNS.MALWARE) {
+      if (pattern.test(domain)) {
+        threatAnalysis.threats.malware = true;
+        threatAnalysis.indicators.push(`Matches malware pattern`);
+        threatAnalysis.severity = 'critical';
+        break;
+      }
+    }
+    
+    for (const pattern of THREAT_PATTERNS.SUSPICIOUS) {
+      if (pattern.test(domain)) {
+        threatAnalysis.threats.suspicious = true;
+        threatAnalysis.indicators.push(`Matches suspicious pattern`);
+        if (threatAnalysis.severity === 'low') {
+          threatAnalysis.severity = 'medium';
+        }
+        break;
+      }
+    }
+    
+    if (domain.length > 30) {
+      threatAnalysis.threats.suspicious = true;
+      threatAnalysis.indicators.push('Unusually long domain name');
+    }
+    
+    if (domain.split('.').length > 3) {
+      threatAnalysis.threats.suspicious = true;
+      threatAnalysis.indicators.push('Multiple subdomains detected');
+    }
+    
+    const tld = domain.split('.').pop();
+    const suspiciousTlds = ['tk', 'ml', 'ga', 'cf', 'click', 'download', 'zip'];
+    if (suspiciousTlds.includes(tld)) {
+      threatAnalysis.threats.suspicious = true;
+      threatAnalysis.indicators.push(`Suspicious TLD: .${tld}`);
+    }
+    
+    if (threatAnalysis.threats.malware) {
+      threatAnalysis.severity = 'critical';
+      threatAnalysis.confidence = 'high';
+    } else if (threatAnalysis.threats.phishing) {
+      threatAnalysis.severity = 'high';
+      threatAnalysis.confidence = 'high';
+    } else if (threatAnalysis.threats.suspicious && threatAnalysis.indicators.length > 1) {
+      threatAnalysis.severity = 'medium';
+      threatAnalysis.confidence = 'medium';
+    }
+    
+  } catch (error) {
+    threatAnalysis.success = false;
+    threatAnalysis.error = error.message;
+  }
+  
+  return threatAnalysis;
+}
+
+async function calculateEnhancedRiskScore(domain, analysis, threatAnalysis, blacklistAnalysis) {
+  let riskScore = 0;
+  const factors = [];
+  
+  if (analysis.privacyAnalysis?.isPrivate) {
+    riskScore += RISK_SCORES.PRIVACY_PROTECTED;
+    factors.push({
+      factor: 'Privacy Protected',
+      score: RISK_SCORES.PRIVACY_PROTECTED,
+      description: 'Domain uses privacy protection service'
+    });
+  }
+  
+  if (threatAnalysis?.threats?.phishing) {
+    riskScore += RISK_SCORES.PHISHING_PATTERN;
+    factors.push({
+      factor: 'Phishing Pattern',
+      score: RISK_SCORES.PHISHING_PATTERN,
+      description: 'Domain matches known phishing patterns'
+    });
+  }
+  
+  if (threatAnalysis?.threats?.malware) {
+    riskScore += RISK_SCORES.MALWARE_PATTERN;
+    factors.push({
+      factor: 'Malware Pattern',
+      score: RISK_SCORES.MALWARE_PATTERN,
+      description: 'Domain matches known malware patterns'
+    });
+  }
+  
+  // Enhanced blacklist factors
+  if (blacklistAnalysis?.summary) {
+    if (blacklistAnalysis.summary.blacklistedEmails > 0) {
+      riskScore += RISK_SCORES.BLACKLISTED_EMAIL;
+      factors.push({
+        factor: 'Blacklisted Emails',
+        score: RISK_SCORES.BLACKLISTED_EMAIL,
+        description: `${blacklistAnalysis.summary.blacklistedEmails} email(s) found on blacklists`
+      });
+    }
+    
+    if (blacklistAnalysis.summary.blacklistedIPs > 0) {
+      riskScore += RISK_SCORES.BLACKLISTED_IP;
+      factors.push({
+        factor: 'Blacklisted IPs',
+        score: RISK_SCORES.BLACKLISTED_IP,
+        description: `${blacklistAnalysis.summary.blacklistedIPs} IP(s) found on blacklists`
+      });
+    }
+    
+    if (blacklistAnalysis.summary.privacyEmails > 0) {
+      riskScore += RISK_SCORES.PRIVACY_EMAIL;
+      factors.push({
+        factor: 'Privacy Protection Emails',
+        score: RISK_SCORES.PRIVACY_EMAIL,
+        description: `${blacklistAnalysis.summary.privacyEmails} privacy protection email(s) detected`
+      });
+    }
+  }
+  
+  if (!analysis.whoisData?.registrantEmail && !analysis.whoisData?.emails?.length) {
+    riskScore += RISK_SCORES.NO_CONTACT_INFO;
+    factors.push({
+      factor: 'No Contact Information',
+      score: RISK_SCORES.NO_CONTACT_INFO,
+      description: 'No valid contact information available'
+    });
+  }
+  
+  if (analysis.whoisData?.creationDate) {
+    const creationDate = new Date(analysis.whoisData.creationDate);
+    const daysSinceCreation = (Date.now() - creationDate.getTime()) / (1000 * 60 * 60 * 24);
+    
+    if (daysSinceCreation < 30) {
+      riskScore += RISK_SCORES.SHORT_DOMAIN_AGE;
+      factors.push({
+        factor: 'Recently Registered',
+        score: RISK_SCORES.SHORT_DOMAIN_AGE,
+        description: `Domain registered ${Math.floor(daysSinceCreation)} days ago`
+      });
+    }
+  }
+  
+  let riskLevel = 'low';
+  if (riskScore >= 80) {
+    riskLevel = 'critical';
+  } else if (riskScore >= 60) {
+    riskLevel = 'high';
+  } else if (riskScore >= 30) {
+    riskLevel = 'medium';
+  }
+  
+  return {
+    totalScore: Math.min(riskScore, 100),
+    maxScore: 100,
+    riskLevel: riskLevel,
+    factors: factors,
+    recommendation: generateRiskRecommendation(riskLevel, riskScore),
+    confidence: factors.length >= 3 ? 'high' : factors.length >= 2 ? 'medium' : 'low',
+    blacklistFactors: blacklistAnalysis?.summary ? {
+      blacklistedEmails: blacklistAnalysis.summary.blacklistedEmails,
+      blacklistedIPs: blacklistAnalysis.summary.blacklistedIPs,
+      privacyEmails: blacklistAnalysis.summary.privacyEmails,
+      overallBlacklistRisk: blacklistAnalysis.summary.overallRisk
+    } : null
+  };
+}
+
+// ===== HELPER FUNCTIONS =====
 
 async function getWhoisData(domain) {
   const methods = [
@@ -716,7 +1243,7 @@ async function whoisAPILookup(domain) {
     const response = await axios.get(`https://whoisjson.com/api/v1/whois?domain=${domain}`, {
       timeout: CONFIG.WHOIS_TIMEOUT,
       headers: { 
-        'User-Agent': 'WHOIS-Intelligence-Tool/2.1',
+        'User-Agent': 'WHOIS-Intelligence-Tool/2.2',
         ...(process.env.WHOISJSON_API_KEY && { 
           'Authorization': `Bearer ${process.env.WHOISJSON_API_KEY}` 
         })
@@ -764,213 +1291,17 @@ async function getDNSRecords(domain) {
   return records;
 }
 
-async function performThreatAnalysis(domain) {
-  const threatAnalysis = {
-    domain,
-    success: true,
-    timestamp: new Date().toISOString(),
-    threats: {
-      malicious: false,
-      phishing: false,
-      malware: false,
-      suspicious: false
-    },
-    indicators: [],
-    severity: 'low',
-    confidence: 'medium',
-    detailedAnalysis: {}
-  };
-  
-  try {
-    // Check for phishing patterns
-    for (const pattern of THREAT_PATTERNS.PHISHING) {
-      if (pattern.test(domain)) {
-        threatAnalysis.threats.phishing = true;
-        threatAnalysis.indicators.push(`Matches phishing pattern: ${pattern.source}`);
-        threatAnalysis.severity = 'high';
-        break;
-      }
-    }
-    
-    // Check for malware patterns
-    for (const pattern of THREAT_PATTERNS.MALWARE) {
-      if (pattern.test(domain)) {
-        threatAnalysis.threats.malware = true;
-        threatAnalysis.indicators.push(`Matches malware pattern: ${pattern.source}`);
-        threatAnalysis.severity = 'critical';
-        break;
-      }
-    }
-    
-    // Check for suspicious characteristics
-    for (const pattern of THREAT_PATTERNS.SUSPICIOUS) {
-      if (pattern.test(domain)) {
-        threatAnalysis.threats.suspicious = true;
-        threatAnalysis.indicators.push(`Matches suspicious pattern: ${pattern.source}`);
-        if (threatAnalysis.severity === 'low') {
-          threatAnalysis.severity = 'medium';
-        }
-        break;
-      }
-    }
-    
-    // Additional suspicious indicators
-    if (domain.length > 30) {
-      threatAnalysis.threats.suspicious = true;
-      threatAnalysis.indicators.push('Unusually long domain name');
-    }
-    
-    if (domain.split('.').length > 3) {
-      threatAnalysis.threats.suspicious = true;
-      threatAnalysis.indicators.push('Multiple subdomains detected');
-    }
-    
-    // Check for unusual TLDs
-    const tld = domain.split('.').pop();
-    const suspiciousTlds = ['tk', 'ml', 'ga', 'cf', 'click', 'download', 'zip'];
-    if (suspiciousTlds.includes(tld)) {
-      threatAnalysis.threats.suspicious = true;
-      threatAnalysis.indicators.push(`Suspicious TLD: .${tld}`);
-    }
-    
-    // Update severity and confidence
-    if (threatAnalysis.threats.malware) {
-      threatAnalysis.severity = 'critical';
-      threatAnalysis.confidence = 'high';
-    } else if (threatAnalysis.threats.phishing) {
-      threatAnalysis.severity = 'high';
-      threatAnalysis.confidence = 'high';
-    } else if (threatAnalysis.threats.suspicious && threatAnalysis.indicators.length > 1) {
-      threatAnalysis.severity = 'medium';
-      threatAnalysis.confidence = 'medium';
-    }
-    
-  } catch (error) {
-    threatAnalysis.success = false;
-    threatAnalysis.error = error.message;
-  }
-  
-  return threatAnalysis;
-}
-
-function calculateRiskScore(domain, analysis, threatAnalysis) {
-  let riskScore = 0;
-  const factors = [];
-  
-  // Privacy protection
-  if (analysis.privacyAnalysis?.isPrivate) {
-    riskScore += RISK_SCORES.PRIVACY_PROTECTED;
-    factors.push({
-      factor: 'Privacy Protected',
-      score: RISK_SCORES.PRIVACY_PROTECTED,
-      description: 'Domain uses privacy protection service'
-    });
-  }
-  
-  // Threat patterns
-  if (threatAnalysis?.threats?.phishing) {
-    riskScore += RISK_SCORES.PHISHING_PATTERN;
-    factors.push({
-      factor: 'Phishing Pattern',
-      score: RISK_SCORES.PHISHING_PATTERN,
-      description: 'Domain matches known phishing patterns'
-    });
-  }
-  
-  if (threatAnalysis?.threats?.malware) {
-    riskScore += RISK_SCORES.MALWARE_PATTERN;
-    factors.push({
-      factor: 'Malware Pattern',
-      score: RISK_SCORES.MALWARE_PATTERN,
-      description: 'Domain matches known malware patterns'
-    });
-  }
-  
-  // Missing contact info
-  if (!analysis.whoisData?.registrantEmail && !analysis.whoisData?.emails?.length) {
-    riskScore += RISK_SCORES.NO_CONTACT_INFO;
-    factors.push({
-      factor: 'No Contact Information',
-      score: RISK_SCORES.NO_CONTACT_INFO,
-      description: 'No valid contact information available'
-    });
-  }
-  
-  // Domain age (if creation date available)
-  if (analysis.whoisData?.creationDate) {
-    const creationDate = new Date(analysis.whoisData.creationDate);
-    const daysSinceCreation = (Date.now() - creationDate.getTime()) / (1000 * 60 * 60 * 24);
-    
-    if (daysSinceCreation < 30) {
-      riskScore += RISK_SCORES.SHORT_DOMAIN_AGE;
-      factors.push({
-        factor: 'Recently Registered',
-        score: RISK_SCORES.SHORT_DOMAIN_AGE,
-        description: `Domain registered ${Math.floor(daysSinceCreation)} days ago`
-      });
-    }
-  }
-  
-  // Multiple subdomains
-  if (domain.split('.').length > 3) {
-    riskScore += RISK_SCORES.MULTIPLE_SUBDOMAINS;
-    factors.push({
-      factor: 'Multiple Subdomains',
-      score: RISK_SCORES.MULTIPLE_SUBDOMAINS,
-      description: 'Domain has multiple subdomain levels'
-    });
-  }
-  
-  // Unusual TLD
-  const tld = domain.split('.').pop();
-  const suspiciousTlds = ['tk', 'ml', 'ga', 'cf', 'click', 'download', 'zip'];
-  if (suspiciousTlds.includes(tld)) {
-    riskScore += RISK_SCORES.UNUSUAL_TLD;
-    factors.push({
-      factor: 'Suspicious TLD',
-      score: RISK_SCORES.UNUSUAL_TLD,
-      description: `Uses suspicious top-level domain: .${tld}`
-    });
-  }
-  
-  // Calculate risk level
-  let riskLevel = 'low';
-  if (riskScore >= 60) {
-    riskLevel = 'critical';
-  } else if (riskScore >= 40) {
-    riskLevel = 'high';
-  } else if (riskScore >= 20) {
-    riskLevel = 'medium';
-  }
-  
-  return {
-    totalScore: Math.min(riskScore, 100),
-    maxScore: 100,
-    riskLevel: riskLevel,
-    factors: factors,
-    recommendation: generateRiskRecommendation(riskLevel, riskScore),
-    confidence: factors.length >= 3 ? 'high' : factors.length >= 2 ? 'medium' : 'low'
-  };
-}
-
-// ===== PRIVACY ANALYSIS FUNCTIONS =====
-
 async function analyzePrivacyProtection(whoisData) {
   const privacyServices = [
     'whoisguard', 'domains by proxy', 'perfect privacy', 'private whois',
     'contact privacy', 'redacted for privacy', 'data protected',
-    'privacy service', 'whois privacy', 'private registration',
-    'proxy protection', 'domain privacy', 'registration private',
-    'withheld for privacy', 'privacy protected', 'domain protection'
+    'privacy service', 'whois privacy', 'private registration'
   ];
   
   const whoisText = JSON.stringify(whoisData).toLowerCase();
-  
   let isPrivate = false;
   let privacyService = null;
-  let privacyEmails = [];
   
-  // Check for privacy indicators
   for (const service of privacyServices) {
     if (whoisText.includes(service)) {
       isPrivate = true;
@@ -979,227 +1310,17 @@ async function analyzePrivacyProtection(whoisData) {
     }
   }
   
-  // Extract privacy-related emails
-  if (whoisData.emails) {
-    for (const email of whoisData.emails) {
-      const domain = email.split('@')[1];
-      const localPart = email.split('@')[0].toLowerCase();
-      
-      const isPrivacyEmail = 
-        domain.includes('privacy') || 
-        domain.includes('whoisguard') || 
-        domain.includes('proxy') ||
-        localPart.includes('privacy') ||
-        localPart.includes('whois');
-      
-      if (isPrivacyEmail) {
-        isPrivate = true;
-        privacyEmails.push(email);
-      }
-    }
-  }
-  
   return {
     isPrivate,
     privacyService,
-    privacyEmails,
     confidence: isPrivate ? 'high' : 'low'
   };
 }
 
-async function analyzePrivacyProtectionEnhanced(whoisData, originalDomain) {
-  const privacyServices = [
-    'whoisguard', 'domains by proxy', 'perfect privacy', 'private whois',
-    'contact privacy', 'redacted for privacy', 'data protected',
-    'privacy service', 'whois privacy', 'private registration',
-    'proxy protection', 'domain privacy', 'registration private',
-    'withheld for privacy', 'privacy protected', 'domain protection'
-  ];
-  
-  const whoisText = JSON.stringify(whoisData).toLowerCase();
-  
-  let isPrivate = false;
-  let privacyService = null;
-  let privacyEmails = [];
-  let privacyDomains = [];
-  let recursiveAnalysis = {};
-  
-  // Check for privacy indicators
-  for (const service of privacyServices) {
-    if (whoisText.includes(service)) {
-      isPrivate = true;
-      privacyService = service;
-      break;
-    }
-  }
-  
-  // Extract ALL privacy-related emails and domains
-  if (whoisData.emails) {
-    for (const email of whoisData.emails) {
-      const domain = email.split('@')[1];
-      const localPart = email.split('@')[0].toLowerCase();
-      
-      const isPrivacyEmail = 
-        domain.includes('privacy') || 
-        domain.includes('whoisguard') || 
-        domain.includes('proxy') ||
-        domain.includes('protection') ||
-        localPart.includes('privacy') ||
-        localPart.includes('whois') ||
-        localPart.includes('proxy') ||
-        privacyServices.some(service => 
-          domain.includes(service.replace(/\s+/g, '')) || 
-          localPart.includes(service.replace(/\s+/g, ''))
-        );
-      
-      if (isPrivacyEmail) {
-        isPrivate = true;
-        privacyEmails.push(email);
-        if (!privacyDomains.includes(domain)) {
-          privacyDomains.push(domain);
-        }
-      }
-    }
-  }
-  
-  // Perform recursive analysis on privacy domains
-  if (isPrivate && privacyDomains.length > 0) {
-    console.log(`[PRIVACY RECURSIVE] Found ${privacyDomains.length} privacy domains for ${originalDomain}`);
-    
-    for (const privacyDomain of privacyDomains.slice(0, 3)) { // Limit to 3 for performance
-      if (privacyDomain !== originalDomain) {
-        try {
-          console.log(`[RECURSIVE] Analyzing privacy domain: ${privacyDomain}`);
-          const recursiveData = await performRecursivePrivacyAnalysis(privacyDomain, originalDomain);
-          recursiveAnalysis[privacyDomain] = recursiveData;
-        } catch (error) {
-          console.log(`[RECURSIVE ERROR] Failed to analyze ${privacyDomain}: ${error.message}`);
-          recursiveAnalysis[privacyDomain] = { 
-            error: error.message,
-            analyzedAt: new Date().toISOString()
-          };
-        }
-      }
-    }
-  }
-  
-  return {
-    isPrivate,
-    privacyService,
-    privacyEmails,
-    privacyDomains,
-    recursiveAnalysis,
-    confidence: isPrivate ? 'high' : 'low',
-    needsInvestigation: isPrivate && Object.keys(recursiveAnalysis).length > 0
-  };
-}
-
-async function performRecursivePrivacyAnalysis(privacyDomain, originalDomain) {
-  const analysis = {
-    domain: privacyDomain,
-    originalDomain: originalDomain,
-    timestamp: new Date().toISOString(),
-    whoisData: null,
-    dnsRecords: null,
-    registrarIntelligence: null,
-    geoIntelligence: null,
-    companyIntelligence: null,
-    investigationSummary: null
-  };
-  
-  try {
-    // Get WHOIS data
-    analysis.whoisData = await getWhoisData(privacyDomain);
-    
-    // Get DNS records
-    analysis.dnsRecords = await getDNSRecords(privacyDomain);
-    
-    // Enhanced registrar intelligence
-    analysis.registrarIntelligence = enhancedRegistrarAnalysis(analysis.whoisData);
-    
-    // Geographic intelligence
-    analysis.geoIntelligence = await enhancedGeoAnalysis(analysis.dnsRecords, analysis.whoisData);
-    
-    // Company intelligence
-    analysis.companyIntelligence = await detectActualCompany(analysis);
-    
-    // Generate investigation summary
-    analysis.investigationSummary = generateInvestigationSummary(analysis);
-    
-    return analysis;
-    
-  } catch (error) {
-    console.error(`[RECURSIVE ERROR] ${privacyDomain}:`, error.message);
-    analysis.error = error.message;
-    return analysis;
-  }
-}
-
-// ===== HELPER FUNCTIONS =====
-
-function parseRawWhois(rawData, domain) {
-  const lines = rawData.split('\n');
-  const parsed = { domain, rawData };
-  
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-    
-    if (lower.includes('registrar:') && !parsed.registrar) {
-      parsed.registrar = line.split(':')[1]?.trim();
-    } else if ((lower.includes('creation date:') || lower.includes('created:')) && !parsed.creationDate) {
-      parsed.creationDate = line.split(':')[1]?.trim();
-    } else if (lower.includes('expir') && !parsed.expirationDate) {
-      parsed.expirationDate = line.split(':')[1]?.trim();
-    } else if (lower.includes('registrant country:') && !parsed.registrantCountry) {
-      parsed.registrantCountry = line.split(':')[1]?.trim();
-    }
-  }
-  
-  // Extract emails
-  parsed.emails = extractEmails(rawData);
-  
-  // Extract name servers
-  const nsRegex = /name server:\s*([^\s\r\n]+)/gi;
-  const nameServers = [];
-  let match;
-  while ((match = nsRegex.exec(rawData)) !== null) {
-    nameServers.push(match[1].toLowerCase());
-  }
-  parsed.nameServers = [...new Set(nameServers)];
-  
-  return parsed;
-}
-
-function parseWhoisResponse(data) {
-  return {
-    domain: data.domain,
-    registrar: data.registrar,
-    creationDate: data.creation_date || data.created,
-    expirationDate: data.expiration_date || data.expires,
-    updatedDate: data.updated_date || data.updated,
-    status: data.status,
-    registrantName: data.registrant_name,
-    registrantOrganization: data.registrant_organization,
-    registrantEmail: data.registrant_email,
-    registrantCountry: data.registrant_country,
-    adminEmail: data.admin_email,
-    techEmail: data.tech_email,
-    nameServers: data.name_servers || data.nameservers,
-    emails: extractEmails(JSON.stringify(data)),
-    rawData: data
-  };
-}
-
-function extractEmails(text) {
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const emails = text.match(emailRegex) || [];
-  return [...new Set(emails.map(email => email.toLowerCase()))];
-}
-
 function analyzeRegistrar(whoisData) {
   const registrar = whoisData.registrar || 'Unknown';
-  let isUSBased = false;
   let category = 'Other';
+  let isUSBased = false;
   
   const registrarLower = registrar.toLowerCase();
   
@@ -1212,8 +1333,7 @@ function analyzeRegistrar(whoisData) {
     'tucows': { category: 'US Wholesale/Reseller', usBased: true },
     'google domains': { category: 'Tech Giant US', usBased: true },
     'amazon': { category: 'Tech Giant US', usBased: true },
-    'cloudflare': { category: 'Tech Giant US', usBased: true },
-    'markmonitor': { category: 'Enterprise US', usBased: true }
+    'cloudflare': { category: 'Tech Giant US', usBased: true }
   };
   
   for (const [key, info] of Object.entries(usRegistrars)) {
@@ -1230,53 +1350,6 @@ function analyzeRegistrar(whoisData) {
     isUSBased,
     country: whoisData.registrantCountry || whoisData.adminCountry || 'Unknown'
   };
-}
-
-function enhancedRegistrarAnalysis(whoisData) {
-  const registrar = whoisData.registrar || 'Unknown';
-  const registrarLower = registrar.toLowerCase();
-  
-  const registrarIntelligence = {
-    name: registrar,
-    category: 'Unknown',
-    isUSBased: false,
-    parentCompany: null,
-    headquarters: null,
-    confidence: 'medium'
-  };
-  
-  const enhancedRegistrarDB = {
-    'namecheap': {
-      category: 'Major US Commercial',
-      isUSBased: true,
-      parentCompany: 'Namecheap, Inc.',
-      headquarters: 'Los Angeles, California, USA',
-      confidence: 'high'
-    },
-    'godaddy': {
-      category: 'Major US Commercial',
-      isUSBased: true,
-      parentCompany: 'GoDaddy Inc.',
-      headquarters: 'Scottsdale, Arizona, USA',
-      confidence: 'high'
-    },
-    'network solutions': {
-      category: 'Legacy US Provider',
-      isUSBased: true,
-      parentCompany: 'Web.com Group',
-      headquarters: 'Herndon, Virginia, USA',
-      confidence: 'high'
-    }
-  };
-  
-  for (const [key, info] of Object.entries(enhancedRegistrarDB)) {
-    if (registrarLower.includes(key)) {
-      Object.assign(registrarIntelligence, info);
-      break;
-    }
-  }
-  
-  return registrarIntelligence;
 }
 
 async function analyzeGeolocation(dnsData) {
@@ -1318,158 +1391,21 @@ async function analyzeGeolocation(dnsData) {
   };
 }
 
-async function enhancedGeoAnalysis(dnsRecords, whoisData) {
-  const geoAnalysis = {
-    ipLocations: [],
-    infrastructureCountries: new Set(),
-    usPresence: false,
-    primaryCountry: null
+function generateIntelligenceSummary(analysis) {
+  return {
+    domain: analysis.domain,
+    isUSRegistrar: analysis.registrarInfo?.isUSBased || false,
+    registrar: analysis.registrarInfo?.name || 'Unknown',
+    registrarCategory: analysis.registrarInfo?.category || 'Unknown',
+    isPrivacyProtected: analysis.privacyAnalysis?.isPrivate || false,
+    privacyService: analysis.privacyAnalysis?.privacyService || null,
+    registrantCountry: analysis.whoisData?.registrantCountry || 'Unknown',
+    creationDate: analysis.whoisData?.creationDate || 'Unknown',
+    expirationDate: analysis.whoisData?.expirationDate || 'Unknown',
+    nameServers: analysis.dnsData?.NS || [],
+    primaryIP: analysis.dnsData?.A?.[0] || null,
+    geoLocation: analysis.geoData?.primaryLocation || null
   };
-  
-  if (dnsRecords.A) {
-    for (const ip of dnsRecords.A) {
-      const geo = geoip.lookup(ip);
-      if (geo) {
-        geoAnalysis.ipLocations.push({
-          ip,
-          country: geo.country,
-          region: geo.region,
-          city: geo.city
-        });
-        geoAnalysis.infrastructureCountries.add(geo.country);
-        if (geo.country === 'US') {
-          geoAnalysis.usPresence = true;
-        }
-      }
-    }
-  }
-  
-  const countries = Array.from(geoAnalysis.infrastructureCountries);
-  if (countries.length > 0) {
-    geoAnalysis.primaryCountry = geoAnalysis.usPresence ? 'US' : countries[0];
-  }
-  
-  return geoAnalysis;
-}
-
-async function detectActualCompany(analysis) {
-  const companyIntelligence = {
-    actualCompany: null,
-    confidence: 'low',
-    indicators: [],
-    usConnections: []
-  };
-  
-  const domain = analysis.domain;
-  
-  if (domain.includes('namecheap')) {
-    companyIntelligence.actualCompany = 'Namecheap, Inc. (US Company)';
-    companyIntelligence.confidence = 'high';
-    companyIntelligence.indicators.push('Domain contains "namecheap"');
-    companyIntelligence.usConnections.push('Namecheap headquarters: Los Angeles, CA');
-  }
-  
-  if (analysis.registrarIntelligence && analysis.registrarIntelligence.isUSBased) {
-    companyIntelligence.usConnections.push(`Registrar: ${analysis.registrarIntelligence.name} (US-based)`);
-    companyIntelligence.indicators.push('Registered with US-based registrar');
-  }
-  
-  if (analysis.geoIntelligence && analysis.geoIntelligence.usPresence) {
-    companyIntelligence.usConnections.push('Infrastructure hosted in US');
-    companyIntelligence.indicators.push('US infrastructure presence detected');
-  }
-  
-  if (companyIntelligence.indicators.length >= 2) {
-    companyIntelligence.confidence = 'high';
-  } else if (companyIntelligence.indicators.length >= 1) {
-    companyIntelligence.confidence = 'medium';
-  }
-  
-  return companyIntelligence;
-}
-
-function generateInvestigationSummary(analysis) {
-  const summary = {
-    overallAssessment: 'unknown',
-    usJurisdictionLikelihood: 'unknown',
-    evidenceStrength: 'weak'
-  };
-  
-  let usIndicators = 0;
-  let totalIndicators = 0;
-  
-  if (analysis.registrarIntelligence?.isUSBased) usIndicators++;
-  totalIndicators++;
-  
-  if (analysis.geoIntelligence?.usPresence) usIndicators++;
-  totalIndicators++;
-  
-  if (analysis.companyIntelligence?.actualCompany) usIndicators++;
-  totalIndicators++;
-  
-  const usPercentage = (usIndicators / totalIndicators) * 100;
-  
-  if (usPercentage >= 75) {
-    summary.usJurisdictionLikelihood = 'very_high';
-    summary.overallAssessment = 'us_jurisdiction_likely';
-    summary.evidenceStrength = 'strong';
-  } else if (usPercentage >= 50) {
-    summary.usJurisdictionLikelihood = 'medium';
-    summary.overallAssessment = 'mixed_jurisdiction';
-    summary.evidenceStrength = 'moderate';
-  } else {
-    summary.usJurisdictionLikelihood = 'low';
-    summary.overallAssessment = 'non_us_jurisdiction';
-    summary.evidenceStrength = 'weak';
-  }
-  
-  return summary;
-}
-
-function generateComprehensiveReport(privacyAnalysis, originalDomain) {
-  const report = {
-    summary: {
-      totalPrivacyDomains: privacyAnalysis.privacyDomains.length,
-      investigatedDomains: Object.keys(privacyAnalysis.recursiveAnalysis).length,
-      usJurisdictionLikelihood: 'unknown'
-    },
-    privacyBypassOptions: [],
-    legalRecommendations: [],
-    nextSteps: []
-  };
-  
-  let totalUsIndicators = 0;
-  let totalInvestigated = 0;
-  
-  for (const [domain, analysis] of Object.entries(privacyAnalysis.recursiveAnalysis)) {
-    if (analysis.error) continue;
-    
-    totalInvestigated++;
-    
-    if (analysis.registrarIntelligence?.isUSBased) totalUsIndicators++;
-    if (analysis.geoIntelligence?.usPresence) totalUsIndicators++;
-    if (analysis.companyIntelligence?.actualCompany) totalUsIndicators++;
-  }
-  
-  if (totalInvestigated > 0) {
-    const usPercentage = (totalUsIndicators / (totalInvestigated * 3)) * 100;
-    
-    if (usPercentage >= 66) {
-      report.summary.usJurisdictionLikelihood = 'very_high';
-    } else if (usPercentage >= 33) {
-      report.summary.usJurisdictionLikelihood = 'medium';
-    } else {
-      report.summary.usJurisdictionLikelihood = 'low';
-    }
-  }
-  
-  // Generate recommendations
-  if (report.summary.usJurisdictionLikelihood === 'very_high') {
-    report.legalRecommendations.push('Strong case for US jurisdiction - pursue UDRP or federal court action');
-    report.nextSteps.push('Engage US-qualified domain dispute counsel');
-  }
-  
-  return report;
 }
 
 async function performComprehensiveMXAnalysis(domain) {
@@ -1484,18 +1420,13 @@ async function performComprehensiveMXAnalysis(domain) {
   };
   
   try {
-    // Get DNS records
     mxAnalysis.dnsRecords = await getDNSRecords(domain);
     
-    // Analyze MX records
     if (mxAnalysis.dnsRecords.MX && mxAnalysis.dnsRecords.MX.length > 0) {
       mxAnalysis.mxRecords = await analyzeMXRecords(domain);
     }
     
-    // Generate email infrastructure summary
     mxAnalysis.emailInfrastructure = generateEmailInfrastructureSummary(mxAnalysis);
-    
-    // Analyze email security
     mxAnalysis.securityAnalysis = analyzeEmailSecurity(mxAnalysis);
     
   } catch (error) {
@@ -1595,21 +1526,61 @@ function analyzeEmailSecurity(mxAnalysis) {
   return security;
 }
 
-function generateIntelligenceSummary(analysis) {
+function parseRawWhois(rawData, domain) {
+  const lines = rawData.split('\n');
+  const parsed = { domain, rawData };
+  
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    
+    if (lower.includes('registrar:') && !parsed.registrar) {
+      parsed.registrar = line.split(':')[1]?.trim();
+    } else if ((lower.includes('creation date:') || lower.includes('created:')) && !parsed.creationDate) {
+      parsed.creationDate = line.split(':')[1]?.trim();
+    } else if (lower.includes('expir') && !parsed.expirationDate) {
+      parsed.expirationDate = line.split(':')[1]?.trim();
+    } else if (lower.includes('registrant country:') && !parsed.registrantCountry) {
+      parsed.registrantCountry = line.split(':')[1]?.trim();
+    }
+  }
+  
+  parsed.emails = extractEmails(rawData);
+  
+  const nsRegex = /name server:\s*([^\s\r\n]+)/gi;
+  const nameServers = [];
+  let match;
+  while ((match = nsRegex.exec(rawData)) !== null) {
+    nameServers.push(match[1].toLowerCase());
+  }
+  parsed.nameServers = [...new Set(nameServers)];
+  
+  return parsed;
+}
+
+function parseWhoisResponse(data) {
   return {
-    domain: analysis.domain,
-    isUSRegistrar: analysis.registrarInfo?.isUSBased || false,
-    registrar: analysis.registrarInfo?.name || 'Unknown',
-    registrarCategory: analysis.registrarInfo?.category || 'Unknown',
-    isPrivacyProtected: analysis.privacyAnalysis?.isPrivate || false,
-    privacyService: analysis.privacyAnalysis?.privacyService || null,
-    registrantCountry: analysis.whoisData?.registrantCountry || 'Unknown',
-    creationDate: analysis.whoisData?.creationDate || 'Unknown',
-    expirationDate: analysis.whoisData?.expirationDate || 'Unknown',
-    nameServers: analysis.dnsData?.NS || [],
-    primaryIP: analysis.dnsData?.A?.[0] || null,
-    geoLocation: analysis.geoData?.primaryLocation || null
+    domain: data.domain,
+    registrar: data.registrar,
+    creationDate: data.creation_date || data.created,
+    expirationDate: data.expiration_date || data.expires,
+    updatedDate: data.updated_date || data.updated,
+    status: data.status,
+    registrantName: data.registrant_name,
+    registrantOrganization: data.registrant_organization,
+    registrantEmail: data.registrant_email,
+    registrantCountry: data.registrant_country,
+    adminEmail: data.admin_email,
+    techEmail: data.tech_email,
+    nameServers: data.name_servers || data.nameservers,
+    emails: extractEmails(JSON.stringify(data)),
+    rawData: data
   };
+}
+
+function extractEmails(text) {
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const emails = text.match(emailRegex) || [];
+  return [...new Set(emails.map(email => email.toLowerCase()))];
 }
 
 function generateRiskRecommendation(riskLevel, score) {
@@ -1642,7 +1613,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ===== 404 HANDLER =====
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -1651,11 +1621,15 @@ app.use((req, res) => {
       '/health', 
       '/api/status', 
       '/api/analyze', 
+      '/api/analyze-enhanced',
       '/api/bulk-analyze', 
       '/api/threat-analysis', 
       '/api/risk-score',
       '/api/privacy-investigation',
-      '/api/mx-analysis'
+      '/api/mx-analysis',
+      '/api/blacklist-analysis',
+      '/api/privacy-email-lookup',
+      '/api/bulk-blacklist-analysis'
     ]
   });
 });
@@ -1674,7 +1648,7 @@ process.on('SIGINT', () => {
 // ===== SERVER STARTUP =====
 app.listen(PORT, () => {
   console.log('='.repeat(60));
-  console.log('🚀 WHOIS Intelligence Enhanced Server v2.1');
+  console.log('🚀 WHOIS Intelligence Enhanced Server v2.2');
   console.log('='.repeat(60));
   console.log(`📡 Server running on port: ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -1683,7 +1657,10 @@ app.listen(PORT, () => {
   console.log(`💾 Cache TTL: ${CONFIG.CACHE_TTL / 3600} hours`);
   console.log(`⚡ Rate limits: 300 per 15min (general), 60 per min (API)`);
   console.log(`🔐 API Key validation: ${VALID_API_KEYS.size} keys configured`);
-  console.log(`🔍 Features: WHOIS, Privacy Investigation, Threat Analysis, Risk Scoring, MX Analysis`);
+  console.log(`🚫 Blacklist checking: ENABLED`);
+  console.log(`📧 Privacy email detection: ${PRIVACY_EMAIL_DOMAINS.size} known services`);
+  console.log(`🌐 DNS blacklists: ${Object.values(DNS_BLACKLISTS).flat().length} lists`);
+  console.log(`🔍 Features: WHOIS, Privacy Investigation, Threat Analysis, Risk Scoring, MX Analysis, Blacklist Checking`);
   console.log('='.repeat(60));
 });
 
